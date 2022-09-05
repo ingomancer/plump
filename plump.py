@@ -54,7 +54,7 @@ def game(players):
         for i in range(player_count):
             player_hand, deck = draw(round, deck)
             guesses.append(players[(i+opening_player)%player_count].guess(player_hand, trump))
-    
+
 
 
 class AIPlayer():
@@ -72,5 +72,6 @@ class HumanPlayer():
 
     def play(self, hand, trump, trick):
         pass
+
 if __name__ == "__main__":
     game([AIPlayer(), AIPlayer(), AIPlayer(), HumanPlayer()])
