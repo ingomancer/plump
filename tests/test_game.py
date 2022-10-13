@@ -1,18 +1,20 @@
 from collections import deque
 from hypothesis import assume, example, given
-from hypothesis.strategies import lists, text, integers, sets, tuples
+from hypothesis.strategies import lists, text, integers, sets, tuples, booleans
 import plump.game as game
 
-cards = integers(min_value=0, max_value=51)
+cards = tuples(integers(min_value=0, max_value=3), integers(min_value=0, max_value=12))
 player_count = {"min_size": 2, "max_size": 4}
 
 
-@given(lists(text()))
+@given(lists(tuples(text(), booleans())))
 def test_create_players(names):
     players = game.create_players(names)
     assert len(players) == len(names)
-    for name, player in zip(names, players):
+    for name_and_human, player in zip(names, players):
+        name, human = name_and_human
         assert name == player.name
+        assert human == player.human
     assert type(players) == deque
 
 
@@ -41,10 +43,10 @@ def test_draw_hand(deck, hand_size):
         min_size=0,
     ),
 )
-@example(prev_guesses={0, 1, 2}, name="", hand={0, 1, 2, 40})
+@example(prev_guesses={0, 1, 2}, name="", hand={(0, 0), (0, 1), (1, 2), (3, 4)})
 def test_make_guess(hand, name, prev_guesses):
     assume(max(prev_guesses, default=0) <= len(hand))
-    player = game.create_players([name]).pop()
+    player = game.create_players([(name, False)]).pop()
     player.state = player.state._replace(hand=hand)
     guess = game.make_guess(player, prev_guesses, 4)
     assert guess >= 0
@@ -82,7 +84,7 @@ def test_determine_winner(trick):
 @given(sets(tuples(text(), integers()), **player_count))
 def test_determine_total_winner(names_and_scores):
     names, scores = list(map(list, zip(*names_and_scores)))
-    players = game.create_players(names)
+    players = game.create_players((name, False) for name in names)
     for player, score in zip(players, scores):
         player.state = player.state._replace(score=score)
     winners = game.determine_total_winners(players)

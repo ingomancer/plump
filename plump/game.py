@@ -5,19 +5,20 @@ from random import sample
 from secrets import choice
 
 suits = ("♥", "♣", "♦", "♠")
+suits = range(4)
 cards = ("2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A")
+cards = range(13)
 
 
 def create_players(player_names):
     players = deque()
-    for name in player_names:
-        players.append(Player(name))
+    for name, human in player_names:
+        players.append(Player(name, human))
     return players
 
 
 def create_deck():
-    return set([x for x in range(52)])
-    # return set(["".join(elem) for elem in itertools.product(suits, cards)])
+    return set(itertools.product(suits, cards))
 
 
 def draw_hand(deck, num):
@@ -26,10 +27,10 @@ def draw_hand(deck, num):
 
 
 def make_guess(player, prev_guesses, player_count):
-    guess = len([card for card in player.state.hand if card >= 40])
+    guess = len([card for card in player.state.hand if card[1] >= 7])
     if len(prev_guesses) == player_count - 1:
         if guess + sum(prev_guesses) == len(player.state.hand):
-            new_guess = len([card for card in player.state.hand if card >= 45])
+            new_guess = len([card for card in player.state.hand if card[1] >= 9])
             if new_guess == guess:
                 guess += 1
             else:
@@ -69,8 +70,10 @@ class Player:
     def __init__(
         self,
         name,
+        human,
     ):
         self.name = name
+        self.human = human
         self.state = State(hand=[], guess=-1, wins=0, score=0)
 
 
@@ -84,7 +87,7 @@ def game(players: "list[str]"):
         for player in players:
             deck, hand = draw_hand(deck, set)
             player.state = player.state._replace(hand=hand)
-            guess = make_guess(player, prev_guesses, len(players))
+            guess = make_guess(player, prev_guesses, len(players))  # TODO: Humans?
             prev_guesses.append(guess)
             player.state = player.state._replace(guess=guess)
         index = determine_start_player(prev_guesses)
@@ -93,7 +96,7 @@ def game(players: "list[str]"):
         while len(players[0].state.hand) > 0:
             trick = []
             for player in players:
-                hand, trick = play_card(player.state.hand, trick)
+                hand, trick = play_card(player.state.hand, trick)  # TODO: Humans?
                 player.state = player.state._replace(hand=hand)
             index = determine_winner(trick)
             players[index].state = player.state._replace(wins=player.state.wins + 1)
@@ -108,6 +111,6 @@ def game(players: "list[str]"):
 
 
 if __name__ == "__main__":
-    players = ["Ingo", "Klara"]
+    players = [("Ingo", True), ("Klara", True)]
     winners = game(players)
-    print(f"The winner(s) is/are {','.join(players[winner] for winner in winners)}!")
+    print(f"The winner(s) is/are {','.join(players[winner][0] for winner in winners)}!")
