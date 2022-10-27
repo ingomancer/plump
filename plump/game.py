@@ -26,15 +26,34 @@ def draw_hand(deck, num):
     return deck - hand, hand
 
 
-def make_guess(player, prev_guesses, player_count):
-    guess = len([card for card in player.state.hand if card[1] >= 7])
+def make_guess(hand, prev_guesses, player_count):
+    guess = len([card for card in hand if card[1] >= 7])
+    if validate_guess(len(hand), prev_guesses, player_count, guess):
+        new_guess = len([card for card in hand if card[1] >= 9])
+        if new_guess == guess:
+            guess += 1
+        else:
+            guess = new_guess
+    return guess
+
+
+def validate_guess(hand_size, prev_guesses, player_count, guess):
+    if not (0 <= guess <= hand_size):
+        return False
     if len(prev_guesses) == player_count - 1:
-        if guess + sum(prev_guesses) == len(player.state.hand):
-            new_guess = len([card for card in player.state.hand if card[1] >= 9])
-            if new_guess == guess:
-                guess += 1
-            else:
-                guess = new_guess
+        if (guess + sum(prev_guesses)) == hand_size:
+            return False
+    return True
+
+
+def request_guess(hand, prev_guesses, player_count):
+    print(f"Hand: {hand}, Previous Guesses: {prev_guesses}, Players: {player_count}")
+    guess = -1
+    while not validate_guess(len(hand), prev_guesses, player_count, guess):
+        try:
+            guess = int(input("Please provide a guess: "))
+        except ValueError:
+            continue
     return guess
 
 
@@ -48,6 +67,23 @@ def determine_winner(trick):
 
 def play_card(hand, trick):
     card = choice(list(hand))
+    return hand - set([card]), trick + [card]
+
+
+def play_human_card(hand, trick):
+    hand = list(hand)
+    print(f"Hand: {hand}, Trick: {trick}")
+    card = -1
+    while card < 0:
+        try:
+            card = int(input("Select card to play (leftmost is 0): "))
+        except ValueError:
+            pass
+        try:
+            card = hand[card]
+        except IndexError:
+            card = -1
+    hand = set(hand)
     return hand - set([card]), trick + [card]
 
 
@@ -86,28 +122,41 @@ def game(players: "list[str]"):
         prev_guesses = []
         for player in players:
             deck, hand = draw_hand(deck, set)
-            player.state = player.state._replace(hand=hand)
-            guess = make_guess(player, prev_guesses, len(players))  # TODO: Humans?
-            prev_guesses.append(guess)
-            player.state = player.state._replace(guess=guess)
+            if player.human:
+                player.state = player.state._replace(
+                    guess=request_guess(hand, prev_guesses, len(players)), hand=hand
+                )
+            else:
+                player.state = player.state._replace(
+                    guess=make_guess(hand, prev_guesses, len(players)), hand=hand
+                )
+            prev_guesses.append(player.state.guess)
         index = determine_start_player(prev_guesses)
         players.rotate(-index)
 
         while len(players[0].state.hand) > 0:
             trick = []
             for player in players:
-                hand, trick = play_card(player.state.hand, trick)  # TODO: Humans?
+                if player.human:
+                    hand, trick = play_human_card(player.state.hand, trick)
+                else:
+                    hand, trick = play_card(player.state.hand, trick)  # TODO: Humans?
                 player.state = player.state._replace(hand=hand)
             index = determine_winner(trick)
             players[index].state = player.state._replace(wins=player.state.wins + 1)
             players.rotate(-index)
         for player in players:
-            if player.state.guess == player.state.wins:
-                player.state = player.state._replace(
-                    score=player.state.score + max(10, 10 * player.state.guess)
-                )
-            player.state = player.state._replace(wins=0)
+            player.state = score_round(player.state)
     return determine_total_winners(players)
+
+
+def score_round(state):
+    if state.guess == state.wins:
+        score = state.score + state.score + max(10, 10 * state.guess)
+    else:
+        score = state.score
+    state = state._replace(score=score, wins=0)
+    return state
 
 
 if __name__ == "__main__":

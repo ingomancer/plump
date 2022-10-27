@@ -36,19 +36,16 @@ def test_draw_hand(deck, hand_size):
 
 @given(
     sets(cards, max_size=10),
-    text(),
     sets(
         integers(max_value=10, min_value=0),
         max_size=3,
         min_size=0,
     ),
 )
-@example(prev_guesses={0, 1, 2}, name="", hand={(0, 0), (0, 1), (1, 2), (3, 4)})
-def test_make_guess(hand, name, prev_guesses):
+@example(prev_guesses={0, 1, 2}, hand={(0, 0), (0, 1), (1, 2), (3, 4)})
+def test_make_guess(hand, prev_guesses):
     assume(max(prev_guesses, default=0) <= len(hand))
-    player = game.create_players([(name, False)]).pop()
-    player.state = player.state._replace(hand=hand)
-    guess = game.make_guess(player, prev_guesses, 4)
+    guess = game.make_guess(hand, prev_guesses, 4)
     assert guess >= 0
     assert guess <= len(hand)
     if len(prev_guesses) == 3:
