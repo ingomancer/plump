@@ -97,3 +97,16 @@ def test_determine_total_winner(names_and_scores):
             for winner in winners
         )
     )
+
+
+@given(sets(cards, min_size=1, max_size=10), lists(cards, max_size=4))
+def test_playable_card_indices(hand, trick):
+    valid_cards = game.playable_card_indices(list(hand), trick)
+    invalid_cards = [hand for card in hand if trick and card[0] != trick[0][0]]
+    hand = list(hand)
+    if len(invalid_cards) == len(hand):
+        assert len(valid_cards) == len(invalid_cards)
+    else:
+        assert all([hand[card][0] == trick[0][0] for card in valid_cards if trick])
+        assert len(valid_cards) + len(invalid_cards) == len(hand)
+    assert len(valid_cards) == len(set(valid_cards))

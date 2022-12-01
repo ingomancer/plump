@@ -3,10 +3,11 @@ import itertools
 import math
 from random import sample
 from secrets import choice
+import time
 
-suits = ("♥", "♣", "♦", "♠")
+suit_symbols = ["♥", "♣", "♦", "♠"]
 suits = range(4)
-cards = ("2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A")
+cards_symbols = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
 cards = range(13)
 
 
@@ -28,7 +29,7 @@ def draw_hand(deck, num):
 
 def make_guess(hand, prev_guesses, player_count):
     guess = len([card for card in hand if card[1] >= 7])
-    if validate_guess(len(hand), prev_guesses, player_count, guess):
+    if not validate_guess(len(hand), prev_guesses, player_count, guess):
         new_guess = len([card for card in hand if card[1] >= 9])
         if new_guess == guess:
             guess += 1
@@ -70,19 +71,40 @@ def play_card(hand, trick):
     return hand - set([card]), trick + [card]
 
 
+def format_trick(trick):
+    pass
+
+
+def format_hand(hand, valid_cards):
+    pass
+
+
+def playable_card_indices(hand, trick):
+    if trick:
+        playable_cards = [
+            index for index, card in enumerate(hand) if card[0] == trick[0][0]
+        ]
+        if playable_cards:
+            return playable_cards
+    return [0] * len(hand)
+
+
 def play_human_card(hand, trick):
     hand = list(hand)
-    print(f"Hand: {hand}, Trick: {trick}")
-    card = -1
-    while card < 0:
+    trick_string = format_trick(trick)
+    valid_cards = playable_card_indices(hand, trick)
+    hand_string = format_hand(hand, trick)
+    print(f"Hand: {hand_string}, Trick: {trick_string}")
+    card_index = -1
+    while card_index < 0:
         try:
-            card = int(input("Select card to play (leftmost is 0): "))
+            card_index = int(input("Select card to play (leftmost is 0): "))
         except ValueError:
             pass
         try:
-            card = hand[card]
+            card = hand[card_index]
         except IndexError:
-            card = -1
+            card_index = -1
     hand = set(hand)
     return hand - set([card]), trick + [card]
 
@@ -118,35 +140,41 @@ def game(players: "list[str]"):
     sets = list(range(10, 1, -1)) + [1] * len(players) + list(range(2, 11))
 
     for set in sets:
+        players_in_set = players.copy()
         deck = create_deck()
         prev_guesses = []
-        for player in players:
+        for player in players_in_set:
             deck, hand = draw_hand(deck, set)
+            print(f"{player.name} is thinking...")
             if player.human:
                 player.state = player.state._replace(
-                    guess=request_guess(hand, prev_guesses, len(players)), hand=hand
+                    guess=request_guess(hand, prev_guesses, len(players_in_set)),
+                    hand=hand,
                 )
             else:
                 player.state = player.state._replace(
-                    guess=make_guess(hand, prev_guesses, len(players)), hand=hand
+                    guess=make_guess(hand, prev_guesses, len(players_in_set)), hand=hand
                 )
             prev_guesses.append(player.state.guess)
         index = determine_start_player(prev_guesses)
-        players.rotate(-index)
+        players_in_set.rotate(-index)
 
-        while len(players[0].state.hand) > 0:
+        while len(players_in_set[0].state.hand) > 0:
             trick = []
-            for player in players:
+            for player in players_in_set:
                 if player.human:
                     hand, trick = play_human_card(player.state.hand, trick)
                 else:
                     hand, trick = play_card(player.state.hand, trick)  # TODO: Humans?
                 player.state = player.state._replace(hand=hand)
             index = determine_winner(trick)
-            players[index].state = player.state._replace(wins=player.state.wins + 1)
-            players.rotate(-index)
-        for player in players:
+            players_in_set[index].state = player.state._replace(
+                wins=player.state.wins + 1
+            )
+            players_in_set.rotate(-index)
+        for player in players_in_set:
             player.state = score_round(player.state)
+        players.rotate(-1)
     return determine_total_winners(players)
 
 

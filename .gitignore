@@ -4,3 +4,5 @@ __pycache__
 .hypothesis/*
 # except for the examples directory
 !.hypothesis/examples/
+# Ignore unittest coverage output
+.coverage
