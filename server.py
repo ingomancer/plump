@@ -18,6 +18,7 @@ def main():
         server_thread.daemon = True
         server_thread.start()
         print("Hello")
+        server_thread.join()
 
 
 if __name__ == "__main__":
