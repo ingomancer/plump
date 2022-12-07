@@ -49,15 +49,16 @@ def validate_guess(hand_size, prev_guesses, player_count, guess):
     return True
 
 
-def request_guess(read, write, prompt, hand, prev_guesses, player_count):
+def request_guess(read, write, name, hand, prev_guesses, player_count):
     hand_string = format_hand(sorted(hand), valid_cards=None)
     write(
-        f"{prompt}Hand: {hand_string}, Previous Guesses: {prev_guesses}, Players: {player_count}"
+        f"{name}: Hand: {hand_string}, Previous Guesses: {prev_guesses}, Players: {player_count}",
+        name
     )
     guess = -1
     while not validate_guess(len(hand), prev_guesses, player_count, guess):
         try:
-            guess = int(read(f"{prompt}Please provide a guess: "))
+            guess = int(read(f"{name}: Please provide a guess: ", name))
         except ValueError:
             continue
     return guess
@@ -108,6 +109,10 @@ def format_hand(hand, valid_cards, with_indices=False):
     )
 
 
+def format_guesses(players):
+    return "Guesses: " + ", ".join([f"{player.name}: {player.state.guess}" for player in players])
+
+
 upside_down_face = "\U0001F643"
 slightly_smiling_face = "\U0001F642"
 
@@ -134,18 +139,20 @@ def playable_card_indices(hand, trick):
     return set()
 
 
-def play_human_card(read, write, prompt, hand, trick):
+def play_human_card(read, write, name, hand, trick):
     hand = sorted(list(hand))
     trick_string = format_trick(trick)
     valid_cards = playable_card_indices(hand, trick)
     hand_string = format_hand(hand, valid_cards, with_indices=True)
+    write(f"{name}'s turn")
     write(
-        f"{prompt}Hand: {hand_string}, {'Trick: ' + trick_string if trick_string else 'You go first!'}"
+        f"{name}: Hand: {hand_string}, {'Trick: ' + trick_string if trick_string else 'You go first!'}",
+        name
     )
     card_index = -1
     while card_index < 0:
         try:
-            card_index = int(read(f"{prompt}Select card to play (leftmost is 0): "))
+            card_index = int(read(f"{name}: Select card to play (leftmost is 0): ", name))
         except ValueError:
             pass
         try:
@@ -198,13 +205,13 @@ def game(read, write, players: "list[str]", num_rounds):
         prev_guesses = []
         for player in players_in_set:
             deck, hand = draw_hand(deck, set)
-            write(f"{player.name} is thinking...")
+            write(f"{player.name}'s turn")
             if player.human:
                 player.state = player.state._replace(
                     guess=request_guess(
                         read,
                         write,
-                        f"{player.name}: ",
+                        player.name,
                         hand,
                         prev_guesses,
                         len(players_in_set),
@@ -216,6 +223,7 @@ def game(read, write, players: "list[str]", num_rounds):
                     guess=make_guess(hand, prev_guesses, len(players_in_set)), hand=hand
                 )
             prev_guesses.append(player.state.guess)
+        write(format_guesses(players))
         index = determine_start_player(prev_guesses)
         players_in_set.rotate(-index)
 
@@ -224,10 +232,10 @@ def game(read, write, players: "list[str]", num_rounds):
             for player in players_in_set:
                 if player.human:
                     hand, trick = play_human_card(
-                        read, write, f"{player.name}: ", player.state.hand, trick
+                        read, write, player.name, player.state.hand, trick
                     )
                 else:
-                    hand, trick = play_card(player.state.hand, trick)  # TODO: Humans?
+                    hand, trick = play_card(player.state.hand, trick)
                 player.state = player.state._replace(hand=hand)
             index = determine_winner(trick)
             winner = players_in_set[index]
@@ -250,7 +258,40 @@ def score_round(state):
     return state
 
 
-def random_name():
+def send_to_remote(socket, text):
+    data = text.encode('utf-8')
+    while len(data) > 0:
+        sent = socket.send(data)
+        data = data[sent:]
+
+
+def send(socket, text):
+    send_to_remote(socket, text) if socket else print(text, end="")
+
+
+def readline_from_remote(socket):
+    all = b""
+    while True:
+        received = socket.recv(1024)
+        all += received
+        if received[-1] == b"\n"[0]:
+            return all.decode('utf-8')
+
+
+def readline(socket):
+    return (readline_from_remote(socket) if socket else input()).strip()
+
+
+def readline_with_prompt(socket, prompt):
+    send(socket, prompt)
+    return readline(socket)
+
+
+def get_player_name(socket=None):
+    return readline_with_prompt(socket, "Please input player name: ")
+
+
+def get_random_name():
     name = "".join(choice("0123456789abcdef") for n in range(7))
     return f"{name[0:3]}-{name[3:]}".upper()
 
@@ -258,37 +299,37 @@ def random_name():
 def main(args):
     port = 9999
     num_players = int(args[0])
-    num_rounds = 10
-    # players = [("Ingo", True), ("Klara", True)]
-    players = [(random_name(), False) for _ in range(num_players)]
+    num_rounds = 10 if num_players < 6 else 52 // num_players
+    players = [(get_random_name(), False) for _ in range(num_players)]
+    client_sockets = {}
 
     with ExitStack() as stack:
         server_socket = stack.enter_context(socket(AF_INET, SOCK_STREAM))
         server_socket.bind(("", port))
         server_socket.listen()
-        client_sockets = []
 
-        for i in range(num_players):
+        name = get_player_name()
+        players[-1] = (name, True)
+        client_sockets[name] = None
+
+        for i in range(num_players-1):
             client_socket = stack.enter_context(server_socket.accept()[0])
-            client_sockets.append(client_socket)
-            players[i] = (random_name(), True)  # TODO: Ask name.
-            # TODO: Allow the host to start the game here without waiting for more players.
+            name = get_player_name(client_socket)
+            client_sockets[name] = client_socket
+            players[i] = (name, True)
 
         server_socket.close()  # stop accepting
 
-        # TODO: Handle socket exceptions.
+        def write(text, name=None):
+            line = (text + "\n")
+            if name:
+                send(client_sockets[name], line)
+            else:
+                for socket in client_sockets.values():
+                    send(socket, line)
 
-        def send_all(text):
-            data = text.encode("utf-8")
-            for socket in client_sockets:
-                socket.send(data)
-
-        def read_from(socket, prompt):
-            socket.send(prompt.encode("utf-8"))
-            return socket.recv(1024)  # TODO: Handle eof. Read until end of line.
-
-        read = lambda prompt: read_from(client_sockets[0], prompt)
-        write = lambda text: send_all(f"{text}\n")
+        def read(prompt, name):
+            return readline_with_prompt(client_sockets[name], prompt)
 
         winners = game(read, write, players, num_rounds)
         write(
