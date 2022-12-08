@@ -23,6 +23,10 @@ requirements: $(VENV_DIR) requirements-dev.txt
 format:
 	$(VENV_BIN)/black .
 
+.PHONY: check_format
+check_format:
+	$(VENV_BIN)/black . --check
+
 .PHONY: test
 test:
 	$(VENV_BIN)/python -m pytest
