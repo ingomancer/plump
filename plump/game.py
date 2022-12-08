@@ -53,7 +53,7 @@ def request_guess(read, write, name, hand, prev_guesses, player_count):
     hand_string = format_hand(sorted(hand), valid_cards=None)
     write(
         f"{name}: Hand: {hand_string}, Previous Guesses: {prev_guesses}, Players: {player_count}",
-        name
+        name,
     )
     guess = -1
     while not validate_guess(len(hand), prev_guesses, player_count, guess):
@@ -110,7 +110,9 @@ def format_hand(hand, valid_cards, with_indices=False):
 
 
 def format_guesses(players):
-    return "Guesses: " + ", ".join([f"{player.name}: {player.state.guess}" for player in players])
+    return "Guesses: " + ", ".join(
+        [f"{player.name}: {player.state.guess}" for player in players]
+    )
 
 
 upside_down_face = "\U0001F643"
@@ -147,12 +149,14 @@ def play_human_card(read, write, name, hand, trick):
     write(f"{name}'s turn")
     write(
         f"{name}: Hand: {hand_string}, {'Trick: ' + trick_string if trick_string else 'You go first!'}",
-        name
+        name,
     )
     card_index = -1
     while card_index < 0:
         try:
-            card_index = int(read(f"{name}: Select card to play (leftmost is 0): ", name))
+            card_index = int(
+                read(f"{name}: Select card to play (leftmost is 0): ", name)
+            )
         except ValueError:
             pass
         try:
@@ -259,7 +263,7 @@ def score_round(state):
 
 
 def send_to_remote(socket, text):
-    data = text.encode('utf-8')
+    data = text.encode("utf-8")
     while len(data) > 0:
         sent = socket.send(data)
         data = data[sent:]
@@ -275,7 +279,7 @@ def readline_from_remote(socket):
         received = socket.recv(1024)
         all += received
         if received[-1] == b"\n"[0]:
-            return all.decode('utf-8')
+            return all.decode("utf-8")
 
 
 def readline(socket):
@@ -298,7 +302,10 @@ def get_random_name():
 
 def main(args):
     port = 9999
-    num_players = int(args[0])
+    try:
+        num_players = int(args[0])
+    except IndexError:
+        num_players = 4
     num_rounds = 10 if num_players < 6 else 52 // num_players
     players = [(get_random_name(), False) for _ in range(num_players)]
     client_sockets = {}
@@ -312,7 +319,7 @@ def main(args):
         players[-1] = (name, True)
         client_sockets[name] = None
 
-        for i in range(num_players-1):
+        for i in range(num_players - 1):
             client_socket = stack.enter_context(server_socket.accept()[0])
             name = get_player_name(client_socket)
             client_sockets[name] = client_socket
@@ -321,12 +328,12 @@ def main(args):
         server_socket.close()  # stop accepting
 
         def write(text, name=None):
-            line = (text + "\n")
+            line = text + "\n"
             if name:
                 send(client_sockets[name], line)
             else:
-                for socket in client_sockets.values():
-                    send(socket, line)
+                for client_socket in client_sockets.values():
+                    send(client_socket, line)
 
         def read(prompt, name):
             return readline_with_prompt(client_sockets[name], prompt)

@@ -6,3 +6,5 @@ __pycache__
 !.hypothesis/examples/
 # Ignore unittest coverage output
 .coverage
+# Ignore venv file
+.venv
