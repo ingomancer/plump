@@ -236,6 +236,7 @@ def game(read, write, players, num_rounds):
                 else:
                     hand, trick = play_card(player.hand, trick)
                 player.hand = hand
+                write(format_trick(trick))
             index = determine_winner(trick)
             winner = players_in_set[index].name
             public[winner] = public[winner]._replace(wins=public[winner].wins + 1)
