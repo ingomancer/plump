@@ -13,13 +13,6 @@ cards_symbols = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A
 cards = range(13)
 
 
-def create_players(player_names):
-    players = deque()
-    for name, human in player_names:
-        players.append(Player(name, human))
-    return players
-
-
 def create_deck():
     return set(itertools.product(suits, cards))
 
@@ -79,58 +72,6 @@ def play_card(hand, trick):
     return hand - set([card]), trick + [card]
 
 
-def darken(text):
-    return f"\033[2m{text}\033[0m"
-
-
-def format_card(card, darkened=False, index=None):
-    suit, value = card
-    index_string = "" if index is None else f"{index}|"
-    text = f"{index_string}{suit_symbols[suit]}{cards_symbols[value]}"
-    return darken(text) if darkened else text
-
-
-def format_trick(trick):
-    if len(trick) > 0:
-        return " ".join([format_card(card) for card in trick])
-    return None
-
-
-def format_hand(hand, valid_cards, with_indices=False):
-    return " ".join(
-        [
-            format_card(
-                card,
-                darkened=(valid_cards and index not in valid_cards),
-                index=index if with_indices else None,
-            )
-            for index, card in enumerate(hand)
-        ]
-    )
-
-
-def format_guesses(players):
-    return "Guesses: " + ", ".join(
-        [f"{player.name}: {player.state.guess}" for player in players]
-    )
-
-
-upside_down_face = "\U0001F643"
-slightly_smiling_face = "\U0001F642"
-
-
-def format_scoreboard(players):
-    sorted_players = sorted(players, key=lambda player: player.name)
-
-    def format_state(state):
-        did_plump = state.wins != state.guess
-        return f"{state.wins}/{state.guess} {upside_down_face if did_plump else slightly_smiling_face} (total: {state.score})"
-
-    return ", ".join(
-        [f"{player.name}: {format_state(player.state)}" for player in sorted_players]
-    )
-
-
 def playable_card_indices(hand, trick):
     if trick:
         playable_cards = set(
@@ -169,19 +110,34 @@ def play_human_card(read, write, name, hand, trick):
     return hand - set([card]), trick + [card]
 
 
-def determine_total_winners(players):
-    winners = []
-    highest_score = -math.inf
-    for index, player in enumerate(players):
-        if player.state.score > highest_score:
-            highest_score = player.state.score
-            winners = [index]
-        elif player.state.score == highest_score:
-            winners.append(index)
-    return winners
+def darken(text):
+    return f"\033[2m{text}\033[0m"
 
 
-State = namedtuple("state", ["hand", "guess", "wins", "score"])
+def format_card(card, darkened=False, index=None):
+    suit, value = card
+    index_string = "" if index is None else f"{index}|"
+    text = f"{index_string}{suit_symbols[suit]}{cards_symbols[value]}"
+    return darken(text) if darkened else text
+
+
+def format_trick(trick):
+    if len(trick) > 0:
+        return " ".join([format_card(card) for card in trick])
+    return None
+
+
+def format_hand(hand, valid_cards, with_indices=False):
+    return " ".join(
+        [
+            format_card(
+                card,
+                darkened=(valid_cards and index not in valid_cards),
+                index=index if with_indices else None,
+            )
+            for index, card in enumerate(hand)
+        ]
+    )
 
 
 class Player:
@@ -192,16 +148,54 @@ class Player:
     ):
         self.name = name
         self.human = human
-        self.state = State(hand=[], guess=-1, wins=0, score=0)
+        self.hand = []
 
 
-def game(read, write, players: "list[str]", num_rounds):
-    players = create_players(players)
+def format_guesses(public):
+    return "Guesses: " + ", ".join(
+        [f"{name}: {state.guess}" for name, state in public.items()]
+    )
+
+
+upside_down_face = "\U0001F643"
+slightly_smiling_face = "\U0001F642"
+
+
+def format_scoreboard(public):
+    sorted_player_names = sorted(public.keys())
+
+    def format_state(public):
+        did_plump = public.wins != public.guess
+        return f"{public.wins}/{public.guess} {upside_down_face if did_plump else slightly_smiling_face} (total: {public.score})"
+
+    return ", ".join(
+        [f"{name}: {format_state(public[name])}" for name in sorted_player_names]
+    )
+
+
+def determine_total_winners(players, public):
+    winners = []
+    highest_score = -math.inf
+    for index, player in enumerate(players):
+        if public[player.name].score > highest_score:
+            highest_score = public[player.name].score
+            winners = [index]
+        elif public[player.name].score == highest_score:
+            winners.append(index)
+    return winners
+
+
+PublicState = namedtuple("PublicState", ["guess", "wins", "score"])
+
+
+def game(read, write, players, num_rounds):
     sets = (
         list(range(num_rounds, 1, -1))
         + [1] * len(players)
         + list(range(2, num_rounds + 1))
     )
+
+    public = {player.name: PublicState(guess=-1, wins=0, score=0) for player in players}
 
     for set in sets:
         players_in_set = players.copy()
@@ -211,7 +205,7 @@ def game(read, write, players: "list[str]", num_rounds):
             deck, hand = draw_hand(deck, set)
             write(f"{player.name}'s turn")
             if player.human:
-                player.state = player.state._replace(
+                public[player.name] = public[player.name]._replace(
                     guess=request_guess(
                         read,
                         write,
@@ -220,46 +214,54 @@ def game(read, write, players: "list[str]", num_rounds):
                         prev_guesses,
                         len(players_in_set),
                     ),
-                    hand=hand,
                 )
+                player.hand = hand
             else:
-                player.state = player.state._replace(
-                    guess=make_guess(hand, prev_guesses, len(players_in_set)), hand=hand
+                public[player.name] = public[player.name]._replace(
+                    guess=make_guess(hand, prev_guesses, len(players_in_set))
                 )
-            prev_guesses.append(player.state.guess)
-        write(format_guesses(players))
+                player.hand = hand
+            prev_guesses.append(public[player.name].guess)
+        write(format_guesses(public))
         index = determine_start_player(prev_guesses)
         players_in_set.rotate(-index)
 
-        while len(players_in_set[0].state.hand) > 0:
+        while len(players_in_set[0].hand) > 0:
             trick = []
             for player in players_in_set:
                 if player.human:
                     hand, trick = play_human_card(
-                        read, write, player.name, player.state.hand, trick
+                        read, write, player.name, player.hand, trick
                     )
                 else:
-                    hand, trick = play_card(player.state.hand, trick)
-                player.state = player.state._replace(hand=hand)
+                    hand, trick = play_card(player.hand, trick)
+                player.hand = hand
             index = determine_winner(trick)
-            winner = players_in_set[index]
-            winner.state = winner.state._replace(wins=winner.state.wins + 1)
-            write(format_scoreboard(players_in_set))
-            write(f"{winner.name} won!")
+            winner = players_in_set[index].name
+            public[winner] = public[winner]._replace(wins=public[winner].wins + 1)
+            write(format_scoreboard(public))
+            write(f"{winner} won!")
             players_in_set.rotate(-index)
         for player in players_in_set:
-            player.state = score_round(player.state)
+            public[player.name] = score_round(public[player.name])
         players.rotate(-1)
     return determine_total_winners(players)
 
 
-def score_round(state):
-    if state.guess == state.wins:
-        score = state.score + max(10, 10 * state.guess)
+def score_round(player_state):
+    if player_state.guess == player_state.wins:
+        score = player_state.score + max(10, 10 * player_state.guess)
     else:
-        score = state.score
-    state = state._replace(score=score, wins=0)
-    return state
+        score = player_state.score
+    player_state = player_state._replace(score=score, wins=0)
+    return player_state
+
+
+def create_players(player_names):
+    players = deque()
+    for name, human in player_names:
+        players.append(Player(name, human))
+    return players
 
 
 def send_to_remote(socket, text):
@@ -300,14 +302,22 @@ def get_random_name():
     return f"{name[0:3]}-{name[3:]}".upper()
 
 
+def read_int(prompt):
+    while True:
+        try:
+            return int(input(prompt))
+        except ValueError:
+            pass
+
+
 def main(args):
     port = 9999
     try:
         num_players = int(args[0])
     except IndexError:
-        num_players = 4
+        num_players = read_int("Number of players: ")
     num_rounds = 10 if num_players < 6 else 52 // num_players
-    players = [(get_random_name(), False) for _ in range(num_players)]
+    player_names_and_types = [(get_random_name(), False) for _ in range(num_players)]
     client_sockets = {}
 
     with ExitStack() as stack:
@@ -316,14 +326,14 @@ def main(args):
         server_socket.listen()
 
         name = get_player_name()
-        players[-1] = (name, True)
+        player_names_and_types[-1] = (name, True)
         client_sockets[name] = None
 
         for i in range(num_players - 1):
             client_socket = stack.enter_context(server_socket.accept()[0])
             name = get_player_name(client_socket)
             client_sockets[name] = client_socket
-            players[i] = (name, True)
+            player_names_and_types[i] = (name, True)
 
         server_socket.close()  # stop accepting
 
@@ -338,9 +348,10 @@ def main(args):
         def read(prompt, name):
             return readline_with_prompt(client_sockets[name], prompt)
 
+        players = create_players(player_names_and_types)
         winners = game(read, write, players, num_rounds)
         write(
-            f"The winner(s) is/are {','.join(players[winner][0] for winner in winners)}!"
+            f"The winner(s) is/are {','.join(players[winner].name for winner in winners)}!"
         )
         client_socket.shutdown(SHUT_RDWR)
 
