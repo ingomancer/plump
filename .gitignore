@@ -8,3 +8,5 @@ __pycache__
 .coverage
 # Ignore venv file
 .venv
+# Ignore rust build output
+/plump-rs/target
