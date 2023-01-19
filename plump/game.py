@@ -1,16 +1,23 @@
-from collections import deque, namedtuple
-from contextlib import ExitStack
+from collections import namedtuple
 import itertools
 import math
 from random import sample
 from secrets import choice
-from socket import socket, AF_INET, SHUT_RDWR, SOCK_STREAM
-from sys import argv
+from plump.format import format_hand, format_trick, format_scoreboard, format_guesses
 
-suit_symbols = ["♥", "♣", "♦", "♠"]
 suits = range(4)
-cards_symbols = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
 cards = range(13)
+
+
+class Player:
+    def __init__(
+        self,
+        name,
+        human,
+    ):
+        self.name = name
+        self.human = human
+        self.hand = []
 
 
 def create_deck():
@@ -110,69 +117,6 @@ def play_human_card(read, write, name, hand, trick):
     return hand - set([card]), trick + [card]
 
 
-def darken(text):
-    return f"\033[2m{text}\033[0m"
-
-
-def format_card(card, darkened=False, index=None):
-    suit, value = card
-    index_string = "" if index is None else f"{index}|"
-    text = f"{index_string}{suit_symbols[suit]}{cards_symbols[value]}"
-    return darken(text) if darkened else text
-
-
-def format_trick(trick):
-    if len(trick) > 0:
-        return " ".join([format_card(card) for card in trick])
-    return None
-
-
-def format_hand(hand, valid_cards, with_indices=False):
-    return " ".join(
-        [
-            format_card(
-                card,
-                darkened=(valid_cards and index not in valid_cards),
-                index=index if with_indices else None,
-            )
-            for index, card in enumerate(hand)
-        ]
-    )
-
-
-class Player:
-    def __init__(
-        self,
-        name,
-        human,
-    ):
-        self.name = name
-        self.human = human
-        self.hand = []
-
-
-def format_guesses(public):
-    return "Guesses: " + ", ".join(
-        [f"{name}: {state.guess}" for name, state in public.items()]
-    )
-
-
-upside_down_face = "\U0001F643"
-slightly_smiling_face = "\U0001F642"
-
-
-def format_scoreboard(public):
-    sorted_player_names = sorted(public.keys())
-
-    def format_state(public):
-        did_plump = public.wins != public.guess
-        return f"{public.wins}/{public.guess} {upside_down_face if did_plump else slightly_smiling_face} (total: {public.score})"
-
-    return ", ".join(
-        [f"{name}: {format_state(public[name])}" for name in sorted_player_names]
-    )
-
-
 def determine_total_winners(players, public):
     winners = []
     highest_score = -math.inf
@@ -256,106 +200,3 @@ def score_round(player_state):
         score = player_state.score
     player_state = player_state._replace(score=score, wins=0)
     return player_state
-
-
-def create_players(player_names):
-    players = deque()
-    for name, human in player_names:
-        players.append(Player(name, human))
-    return players
-
-
-def send_to_remote(socket, text):
-    data = text.encode("utf-8")
-    while len(data) > 0:
-        sent = socket.send(data)
-        data = data[sent:]
-
-
-def send(socket, text):
-    send_to_remote(socket, text) if socket else print(text, end="")
-
-
-def readline_from_remote(socket):
-    all = b""
-    while True:
-        received = socket.recv(1024)
-        all += received
-        if received[-1] == b"\n"[0]:
-            return all.decode("utf-8")
-
-
-def readline(socket):
-    return (readline_from_remote(socket) if socket else input()).strip()
-
-
-def readline_with_prompt(socket, prompt):
-    send(socket, prompt)
-    return readline(socket)
-
-
-def get_player_name(socket=None):
-    return readline_with_prompt(socket, "Please input player name: ")
-
-
-def get_random_name():
-    name = "".join(choice("0123456789abcdef") for n in range(7))
-    return f"{name[0:3]}-{name[3:]}".upper()
-
-
-def read_int(prompt):
-    while True:
-        try:
-            return int(input(prompt))
-        except ValueError:
-            pass
-
-
-def main(args):
-    port = 9999
-    try:
-        num_players = int(args[0])
-    except IndexError:
-        num_players = read_int("Number of players: ")
-    num_rounds = 10 if num_players < 6 else 52 // num_players
-    player_names_and_types = [(get_random_name(), False) for _ in range(num_players)]
-    client_sockets = {}
-
-    with ExitStack() as stack:
-        server_socket = stack.enter_context(socket(AF_INET, SOCK_STREAM))
-        server_socket.bind(("", port))
-        server_socket.listen()
-
-        name = get_player_name()
-        player_names_and_types[-1] = (name, True)
-        client_sockets[name] = None
-
-        for i in range(num_players - 1):
-            client_socket = stack.enter_context(server_socket.accept()[0])
-            name = get_player_name(client_socket)
-            client_sockets[name] = client_socket
-            player_names_and_types[i] = (name, True)
-
-        server_socket.close()  # stop accepting
-
-        def write(text, name=None):
-            line = text + "\n"
-            if name:
-                send(client_sockets[name], line)
-            else:
-                for client_socket in client_sockets.values():
-                    send(client_socket, line)
-
-        def read(prompt, name):
-            return readline_with_prompt(client_sockets[name], prompt)
-
-        players = create_players(player_names_and_types)
-        winners = game(read, write, players, num_rounds)
-        write(
-            f"The winner(s) is/are {','.join(players[winner].name for winner in winners)}!"
-        )
-        client_socket.shutdown(SHUT_RDWR)
-
-
-if __name__ == "__main__":
-    main(argv[1:])
