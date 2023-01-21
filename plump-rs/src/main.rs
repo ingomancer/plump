@@ -75,9 +75,8 @@ impl Drop for CommunicatorImpl {
 fn main() -> IoResult<()> {
     const PORT: u16 = 9999;
 
-    if cfg!(windows) {
-        enable_colors()
-    }
+    #[cfg(windows)]
+    enable_colors();
 
     let num_players = match args().nth(1).map(|s| s.parse()) {
         Some(Ok(value)) => value,
