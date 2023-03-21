@@ -7,6 +7,10 @@ edition = "2021"
 itertools = "0.10.5"
 rand = "0.8.5"
 
+[dev-dependencies]
+proptest = "1.1.0"
+proptest-derive = "0.3.0"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.44.0", features = [
     "Win32_System_Console",

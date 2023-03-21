@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::{iproduct, Itertools};
+
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use rand::seq::IteratorRandom;
 
 use crate::format::{format_guesses, format_hand, format_scoreboard, format_trick};
@@ -12,7 +15,8 @@ pub struct Player<'a> {
     pub hand: Vec<Card>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Debug)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Card {
     pub suit: u32,
     pub value: u32,
@@ -44,6 +48,43 @@ pub fn create_players(player_names: &Vec<(String, bool)>) -> VecDeque<Player> {
         });
     }
     players
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use proptest::{prelude::*, sample::SizeRange};
+
+    proptest! {
+        #[test]
+        fn test_create_players(names in any::<Vec<(String, bool)>>()) {
+            let players = create_players(&names);
+            prop_assert!(players.len() == names.len());
+            for ((name, human), player) in names.iter().zip(players.iter()) {
+                prop_assert!(name == player.name);
+                prop_assert!(human == &player.human);
+            }
+        }
+
+        #[test]
+        fn test_draw_hand(deck in any::<HashSet<Card>>(), hand_size in any::<u8>()) {
+            prop_assume!(deck.len() >= hand_size as _);
+            let (new_deck, hand) = draw_hand(deck.clone(), hand_size as _);
+            prop_assert!(new_deck.is_subset(&deck));
+            prop_assert!(hand.len() == hand_size as _ );
+            prop_assert!(new_deck.len() + hand_size as usize == deck.len());
+            let hand_set: HashSet<Card> = hand.into_iter().collect();
+            prop_assert!(hand_set.is_subset(&deck));
+
+        }
+
+    }
+
+    #[test]
+    fn test_create_deck() {
+        let deck = create_deck();
+        assert!(deck.len() == 52);
+    }
 }
 
 pub trait Communicator {
