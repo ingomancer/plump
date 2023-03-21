@@ -2,9 +2,9 @@ name: Makefile CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 jobs:
   build:
@@ -14,11 +14,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: make venv
-
     - name: Run tests
-      run: make test
+      run: cargo test
 
     - name: Run formatting check
-      run: make check_format
+      run: cargo fmt --check
+
+    - name: Run check
+      run: cargo check
+
+    - name: Run clippy
+      run: cargo clippy

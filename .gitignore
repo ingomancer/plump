@@ -10,4 +10,4 @@ __pycache__
 # Ignore venv file
 .venv
 # Ignore rust build output
-/plump-rs/target
+/target
