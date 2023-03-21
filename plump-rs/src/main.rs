@@ -11,6 +11,7 @@ use std::{
     str::FromStr,
 };
 
+use game::PlayerName;
 use itertools::Itertools;
 use rand::seq::SliceRandom;
 
@@ -48,20 +49,22 @@ struct CommunicatorImpl {
 }
 
 impl Communicator for CommunicatorImpl {
-    fn write(&mut self, message: Message, name: Option<&str>) {
+    fn write_to_all(&mut self, message: Message) {
         let line = message.to_string() + "\n";
 
-        if let Some(name) = name {
-            send(self.sockets.get_mut(name).unwrap(), &line).expect("Failed to write")
-        } else {
-            for client_socket in self.sockets.values_mut() {
-                send(client_socket, &line).expect("Failed to write")
-            }
+        for client_socket in self.sockets.values_mut() {
+            send(client_socket, &line).expect("Failed to write")
         }
     }
 
-    fn read(&mut self, prompt: &str, name: &str) -> String {
-        readline_with_prompt(self.sockets.get_mut(name).unwrap(), prompt).expect("Failed to read")
+    fn write_to_one(&mut self, name: PlayerName, message: Message) {
+        let line = message.to_string() + "\n";
+        send(self.sockets.get_mut(name.as_str()).unwrap(), &line).expect("Failed to write")
+    }
+
+    fn read(&mut self, name: PlayerName, prompt: &str) -> String {
+        readline_with_prompt(self.sockets.get_mut(name.as_str()).unwrap(), prompt)
+            .expect("Failed to read")
     }
 }
 
@@ -123,13 +126,10 @@ fn main() -> IoResult<()> {
     let winners = game(&mut communicator, &mut players, num_rounds);
 
     let players_vec: Vec<Player> = players.into_iter().collect_vec();
-    communicator.write(
-        Message::Winners {
-            players: &players_vec,
-            winner_indices: &winners,
-        },
-        None,
-    );
+    communicator.write_to_all(Message::Winners {
+        players: &players_vec,
+        winner_indices: &winners,
+    });
 
     Ok(())
 }

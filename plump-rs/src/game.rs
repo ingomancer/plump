@@ -11,9 +11,18 @@ use rand::seq::IteratorRandom;
 
 use crate::message::Message;
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlayerName<'a>(&'a str);
+
+impl<'a> PlayerName<'a> {
+    pub fn as_str(&self) -> &str {
+        self.0
+    }
+}
+
 #[derive(Clone)]
 pub struct Player<'a> {
-    pub name: &'a str,
+    pub name: PlayerName<'a>,
     pub human: bool,
     pub hand: Vec<Card>,
 }
@@ -45,7 +54,7 @@ pub fn create_players(player_names: &Vec<(String, bool)>) -> VecDeque<Player> {
     let mut players = VecDeque::new();
     for (name, human) in player_names {
         players.push_back(Player {
-            name,
+            name: PlayerName(name),
             human: *human,
             hand: Vec::new(),
         });
@@ -64,7 +73,7 @@ mod test {
             let players = create_players(&names);
             prop_assert!(players.len() == names.len());
             for ((name, human), player) in names.iter().zip(players.iter()) {
-                prop_assert!(name == player.name);
+                prop_assert!(PlayerName(name) == player.name);
                 prop_assert!(human == &player.human);
             }
         }
@@ -91,8 +100,9 @@ mod test {
 }
 
 pub trait Communicator {
-    fn read(&mut self, prompt: &str, player: &str) -> String;
-    fn write(&mut self, text: Message, player: Option<&str>);
+    fn read(&mut self, player: PlayerName, prompt: &str) -> String;
+    fn write_to_all(&mut self, text: Message);
+    fn write_to_one(&mut self, player: PlayerName, text: Message);
 }
 
 pub fn game<C>(communicator: &mut C, players: &mut VecDeque<Player>, num_rounds: u32) -> Vec<usize>
@@ -126,21 +136,18 @@ where
         for player in &mut players_in_set {
             let hand;
             (deck, hand) = draw_hand(deck, set);
-            communicator.write(Message::Turn { whose: player }, None);
+            communicator.write_to_all(Message::Turn { whose: player });
             let guess = match player.human {
                 true => request_guess(communicator, player, &hand, &prev_guesses, players.len()),
                 false => make_guess(&hand, &prev_guesses, players.len()),
             };
-            public_state.get_mut(player.name).unwrap().guess = Some(guess);
+            public_state.get_mut(&player.name).unwrap().guess = Some(guess);
             player.hand = hand;
             prev_guesses.push(guess);
         }
-        communicator.write(
-            Message::Guesses {
-                state: &public_state,
-            },
-            None,
-        );
+        communicator.write_to_all(Message::Guesses {
+            state: &public_state,
+        });
         let index = determine_start_player(&prev_guesses);
         players_in_set.rotate_left(index);
 
@@ -159,22 +166,19 @@ where
                     (hand, trick) = play_card(player.hand.clone(), trick)
                 }
                 player.hand = hand;
-                communicator.write(Message::Trick(&trick), None);
+                communicator.write_to_all(Message::Trick(&trick));
             }
             let index = determine_winner(&trick);
             let winner = &players_in_set[index];
-            public_state.get_mut(winner.name).unwrap().wins += 1;
-            communicator.write(
-                Message::Scoreboard {
-                    state: &public_state,
-                },
-                None,
-            );
-            communicator.write(Message::Winner(winner), None);
+            public_state.get_mut(&winner.name).unwrap().wins += 1;
+            communicator.write_to_all(Message::Scoreboard {
+                state: &public_state,
+            });
+            communicator.write_to_all(Message::Winner(winner));
             players_in_set.rotate_left(index);
         }
         for player in &players_in_set {
-            let player = public_state.get_mut(player.name).unwrap();
+            let player = public_state.get_mut(&player.name).unwrap();
             *player = score_round(*player);
         }
         players.rotate_left(1)
@@ -236,17 +240,18 @@ fn request_guess<C>(
 where
     C: Communicator,
 {
-    let text = Message::RequestGuessContext {
-        player,
-        hand,
-        guesses,
-        players,
-    };
-
-    communicator.write(text, Some(player.name));
+    communicator.write_to_one(
+        player.name,
+        Message::RequestGuessContext {
+            player,
+            hand,
+            guesses,
+            players,
+        },
+    );
 
     loop {
-        let text = communicator.read("Please make a guess: ", player.name);
+        let text = communicator.read(player.name, "Please make a guess: ");
         let guess: u32 = match text.trim().parse() {
             Ok(guess) => guess,
             Err(_) => continue,
@@ -277,23 +282,26 @@ where
     hand = hand.into_iter().sorted().collect();
     let valid_cards = playable_card_indices(&hand, &trick);
 
-    let turn_string = Message::Turn { whose: player };
-    communicator.write(turn_string, None);
+    communicator.write_to_all(Message::Turn { whose: player });
 
-    let request_context = Message::PlayRequestContext {
-        player,
-        hand: &hand,
-        trick: &trick,
-    };
-
-    communicator.write(request_context, Some(player.name));
+    communicator.write_to_one(
+        player.name,
+        Message::PlayRequestContext {
+            player,
+            hand: &hand,
+            trick: &trick,
+        },
+    );
 
     let Trick(mut cards) = trick;
 
     loop {
         let text = communicator.read(
-            &format!("{}: Select card to play (leftmost is 0): ", &player.name),
             player.name,
+            &format!(
+                "{}: Select card to play (leftmost is 0): ",
+                player.name.as_str()
+            ),
         );
 
         let index: usize = match text.trim().parse() {
@@ -365,15 +373,14 @@ fn score_round(mut player: PublicState) -> PublicState {
     player
 }
 
-fn determine_total_winners(
-    players: &VecDeque<Player>,
-    public: &HashMap<&str, PublicState>,
-) -> Vec<usize> {
+pub type StatePerPlayer<'a> = HashMap<PlayerName<'a>, PublicState>;
+
+fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) -> Vec<usize> {
     let mut winners = Vec::new();
     let mut highest_score = u32::MAX;
 
     for (index, player) in players.iter().enumerate() {
-        let player = public.get(player.name).unwrap();
+        let player = public.get(&player.name).unwrap();
 
         match player.score.cmp(&highest_score) {
             Ordering::Greater => {

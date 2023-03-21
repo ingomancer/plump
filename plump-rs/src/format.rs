@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use itertools::Itertools;
 
 use crate::{
-    game::{playable_card_indices, Card, Player, PublicState, Trick},
+    game::{playable_card_indices, Card, Player, PublicState, StatePerPlayer, Trick},
     message::Message,
 };
 
@@ -64,10 +64,10 @@ fn format_guess(state: &PublicState) -> String {
     state.guess.map(|g| g.to_string()).unwrap_or("?".into())
 }
 
-fn format_guesses(state: &HashMap<&str, PublicState>) -> String {
+fn format_guesses(state: &StatePerPlayer) -> String {
     let guesses = state
         .iter()
-        .map(|(name, state)| format!("{}: {}", name, format_guess(state)))
+        .map(|(name, state)| format!("{}: {}", name.as_str(), format_guess(state)))
         .join(", ");
 
     "Guesses: ".to_owned() + &guesses
@@ -76,7 +76,7 @@ fn format_guesses(state: &HashMap<&str, PublicState>) -> String {
 const UPSIDE_DOWN_FACE: char = '\u{1F643}';
 const SLIGHTLY_SMILING_FACE: char = '\u{1F642}';
 
-fn format_scoreboard(public: &HashMap<&str, PublicState>) -> String {
+fn format_scoreboard(public: &StatePerPlayer) -> String {
     fn format_state(public: &PublicState) -> String {
         let PublicState { guess, wins, score } = *public;
         let did_plump = guess.filter(|guess| wins == *guess).is_none();
@@ -95,7 +95,7 @@ fn format_scoreboard(public: &HashMap<&str, PublicState>) -> String {
         .sorted()
         .map(|name| {
             let state = format_state(public.get(name).unwrap());
-            format!("{name}: {state}")
+            format!("{}: {state}", name.as_str())
         })
         .join(", ")
 }
@@ -109,11 +109,11 @@ fn format_player_prompt(trick: &Trick) -> String {
 }
 
 fn format_turn(player: &Player) -> String {
-    format!("{}'s turn", &player.name)
+    format!("{}'s turn", player.name.as_str())
 }
 
 fn format_winner(player: &Player) -> String {
-    format!("{} won!", &player.name)
+    format!("{} won!", player.name.as_str())
 }
 
 fn format_request_guess_context(
@@ -130,7 +130,7 @@ fn format_request_guess_context(
 
     format!(
         "{}: Hand: {hand_string}, Previous Guesses: {guesses_string}, Players: {players}",
-        &player.name
+        player.name.as_str()
     )
 }
 
@@ -140,11 +140,11 @@ fn format_play_request_context(player: &Player, hand: &[Card], trick: &Trick) ->
     let hand_string = format_hand(hand, &valid_cards, WITH_INDICES);
 
     let state = format_player_prompt(trick);
-    format!("{}: Hand: {hand_string}, {state}", player.name)
+    format!("{}: Hand: {hand_string}, {state}", player.name.as_str())
 }
 
 fn format_winners(players: &[Player], winners: &[usize]) -> String {
-    let winners_text = winners.iter().map(|i| players[*i].name).join(", ");
+    let winners_text = winners.iter().map(|i| players[*i].name.as_str()).join(", ");
     format!("The winner(s) is/are {winners_text}!")
 }
 

@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use crate::game::{Card, Player, PublicState, Trick};
+use crate::game::{Card, Player, StatePerPlayer, Trick};
 
 pub enum Message<'a> {
     RequestGuessContext {
@@ -11,7 +9,7 @@ pub enum Message<'a> {
     },
 
     Guesses {
-        state: &'a HashMap<&'a str, PublicState>,
+        state: &'a StatePerPlayer<'a>,
     },
 
     Turn {
@@ -27,7 +25,7 @@ pub enum Message<'a> {
     Trick(&'a Trick),
 
     Scoreboard {
-        state: &'a HashMap<&'a str, PublicState>,
+        state: &'a StatePerPlayer<'a>,
     },
 
     Winner(&'a Player<'a>),
