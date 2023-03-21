@@ -13,7 +13,7 @@ pub fn input(prompt: &str) -> IoResult<String> {
     Ok(result)
 }
 
-fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
+pub fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
     while !data.is_empty() {
         let sent = socket.write(&data)?;
@@ -23,16 +23,7 @@ fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     Ok(())
 }
 
-pub fn send(socket: &mut Option<TcpStream>, prompt: &str) -> IoResult<()> {
-    if let Some(socket) = socket {
-        send_to_remote(socket, prompt.into())
-    } else {
-        print!("{}", prompt);
-        Ok(())
-    }
-}
-
-fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
+pub fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
     const NEWLINE: u8 = 0xA;
     let mut all = Vec::<u8>::new();
     loop {
@@ -46,18 +37,4 @@ fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
 
         return String::from_utf8(all).map_err(|_| IoError::new(ErrorKind::Other, "invalid UTF-8"));
     }
-}
-
-fn readline(socket: &mut Option<TcpStream>) -> IoResult<String> {
-    let text = match socket {
-        Some(socket) => readline_from_remote(socket),
-        None => input(""),
-    }?;
-
-    Ok(text.trim().to_owned())
-}
-
-pub fn readline_with_prompt(socket: &mut Option<TcpStream>, prompt: &str) -> IoResult<String> {
-    send(socket, prompt)?;
-    readline(socket)
 }

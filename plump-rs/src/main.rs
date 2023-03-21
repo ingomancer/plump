@@ -13,12 +13,13 @@ use std::{
 
 use game::PlayerName;
 use itertools::Itertools;
+use network::{readline_from_remote, send_to_remote};
 use rand::seq::SliceRandom;
 
 use crate::{
     game::{create_players, game, Communicator, Player},
     message::Message,
-    network::{input, readline_with_prompt, send},
+    network::input,
 };
 
 #[cfg(windows)]
@@ -44,34 +45,73 @@ fn enable_colors() {
     }
 }
 
+enum Client {
+    Local,
+    Remote(TcpStream),
+}
+
+impl Client {
+    fn send(&mut self, prompt: &str) -> IoResult<()> {
+        match self {
+            Client::Remote(socket) => send_to_remote(socket, prompt.into()),
+            Client::Local => {
+                print!("{}", prompt);
+                Ok(())
+            }
+        }
+    }
+
+    fn readline(&mut self) -> IoResult<String> {
+        let text = match self {
+            Client::Local => input(""),
+            Client::Remote(socket) => readline_from_remote(socket),
+        }?;
+
+        Ok(text.trim().to_owned())
+    }
+
+    fn readline_with_prompt(&mut self, prompt: &str) -> IoResult<String> {
+        self.send(prompt)?;
+        self.readline()
+    }
+
+    fn get_player_name(&mut self) -> IoResult<String> {
+        self.readline_with_prompt("Please input player name: ")
+    }
+}
+
 struct CommunicatorImpl {
-    sockets: HashMap<String, Option<TcpStream>>,
+    sockets: HashMap<String, Client>,
 }
 
 impl Communicator for CommunicatorImpl {
+    fn read(&mut self, name: PlayerName, prompt: &str) -> String {
+        let client = self.sockets.get_mut(name.as_str()).unwrap();
+        client.readline_with_prompt(prompt).expect("Failed to read")
+    }
+
     fn write_to_all(&mut self, message: Message) {
         let line = message.to_string() + "\n";
 
-        for client_socket in self.sockets.values_mut() {
-            send(client_socket, &line).expect("Failed to write")
+        for client in self.sockets.values_mut() {
+            client.send(&line).expect("Failed to write")
         }
     }
 
     fn write_to_one(&mut self, name: PlayerName, message: Message) {
         let line = message.to_string() + "\n";
-        send(self.sockets.get_mut(name.as_str()).unwrap(), &line).expect("Failed to write")
-    }
-
-    fn read(&mut self, name: PlayerName, prompt: &str) -> String {
-        readline_with_prompt(self.sockets.get_mut(name.as_str()).unwrap(), prompt)
-            .expect("Failed to read")
+        let client = &mut self.sockets.get_mut(name.as_str()).unwrap();
+        client.send(&line).expect("Failed to write")
     }
 }
 
 impl Drop for CommunicatorImpl {
     fn drop(&mut self) {
-        for socket in self.sockets.values().flatten() {
-            _ = socket.shutdown(Shutdown::Both);
+        for socket in self.sockets.values() {
+            match socket {
+                Client::Local => {}
+                Client::Remote(socket) => _ = socket.shutdown(Shutdown::Both),
+            };
         }
     }
 }
@@ -96,24 +136,25 @@ fn main() -> IoResult<()> {
         .map(|_| (get_random_name(), false))
         .collect();
 
-    let mut client_sockets = HashMap::<String, Option<TcpStream>>::new();
+    let mut client_sockets = HashMap::<String, Client>::new();
     let address = SocketAddr::from_str(&format!("0.0.0.0:{PORT}")).expect("Unknown socket address");
 
     {
         let listener = TcpListener::bind(address).expect("Failed to create listener socket");
+        let mut local_client = Client::Local;
 
-        let name = get_player_name(&mut None)?;
-        client_sockets.insert(name.clone(), None);
+        let name = local_client.get_player_name()?;
+        client_sockets.insert(name.clone(), local_client);
         player_names_and_types.push((name, true));
 
         for i in 0..(num_players.max(1) - 1) {
-            let mut client_socket = match listener.incoming().next().unwrap() {
-                Ok(stream) => Some(stream),
+            let mut remote_client = match listener.incoming().next().unwrap() {
+                Ok(stream) => Client::Remote(stream),
                 Err(_) => continue,
             };
 
-            let name = get_player_name(&mut client_socket)?;
-            client_sockets.insert(name.clone(), client_socket);
+            let name = remote_client.get_player_name()?;
+            client_sockets.insert(name.clone(), remote_client);
             player_names_and_types[i as usize] = (name, true);
         }
     }
@@ -143,10 +184,6 @@ fn get_random_name() -> String {
     let prefix = &chars[0..3];
     let suffix = &chars[3..];
     format!("{prefix}-{suffix}").to_uppercase()
-}
-
-fn get_player_name(socket: &mut Option<TcpStream>) -> IoResult<String> {
-    readline_with_prompt(socket, "Please input player name: ")
 }
 
 fn read_u32(prompt: &str) -> u32 {
