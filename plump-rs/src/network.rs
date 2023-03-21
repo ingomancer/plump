@@ -15,7 +15,7 @@ pub fn input(prompt: &str) -> IoResult<String> {
 
 fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
-    while data.len() > 0 {
+    while !data.is_empty() {
         let sent = socket.write(&data)?;
         data.drain(0..sent);
     }

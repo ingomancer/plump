@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet, VecDeque},
+};
 
 use itertools::{iproduct, Itertools};
 
@@ -42,7 +45,7 @@ pub fn create_players(player_names: &Vec<(String, bool)>) -> VecDeque<Player> {
     let mut players = VecDeque::new();
     for (name, human) in player_names {
         players.push_back(Player {
-            name: &name,
+            name,
             human: *human,
             hand: Vec::new(),
         });
@@ -53,7 +56,7 @@ pub fn create_players(player_names: &Vec<(String, bool)>) -> VecDeque<Player> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use proptest::{prelude::*, sample::SizeRange};
+    use proptest::prelude::*;
 
     proptest! {
         #[test]
@@ -124,18 +127,16 @@ where
             let hand;
             (deck, hand) = draw_hand(deck, set);
             communicator.write(&format!("{}'s turn", player.name), None);
-            let guess;
-            if player.human {
-                guess = request_guess(
+            let guess = match player.human {
+                true => request_guess(
                     communicator,
                     player.name,
                     &hand,
                     &prev_guesses,
                     players.len(),
-                );
-            } else {
-                guess = make_guess(&hand, &prev_guesses, players.len());
-            }
+                ),
+                false => make_guess(&hand, &prev_guesses, players.len()),
+            };
             public_state.get_mut(player.name).unwrap().guess = Some(guess);
             player.hand = hand;
             prev_guesses.push(guess);
@@ -146,7 +147,7 @@ where
 
         while players_in_set
             .front()
-            .filter(|p| p.hand.len() > 0)
+            .filter(|p| !p.hand.is_empty())
             .is_some()
         {
             let mut trick = Trick::new();
@@ -175,7 +176,7 @@ where
         players.rotate_left(1)
     }
 
-    determine_total_winners(&players, &public_state)
+    determine_total_winners(players, &public_state)
 }
 
 fn create_deck() -> HashSet<Card> {
@@ -210,14 +211,12 @@ fn make_guess(hand: &Vec<Card>, guesses: &Vec<u32>, players: usize) -> u32 {
 }
 
 fn validate_guess(hand_size: usize, guesses: &Vec<u32>, players: usize, guess: u32) -> bool {
-    if !(guess <= hand_size as u32) {
+    if guess > hand_size as u32 {
         return false;
     }
 
-    if guesses.len() == players - 1 {
-        if (guess + guesses.iter().sum::<u32>()) == hand_size as u32 {
-            return false;
-        }
+    if guesses.len() == players - 1 && (guess + guesses.iter().sum::<u32>()) == hand_size as u32 {
+        return false;
     }
 
     true
@@ -257,7 +256,7 @@ where
     }
 }
 
-fn determine_start_player(guesses: &Vec<u32>) -> usize {
+fn determine_start_player(guesses: &[u32]) -> usize {
     guesses
         .iter()
         .position(|x| x == guesses.iter().max().unwrap())
@@ -304,7 +303,7 @@ where
             Err(_) => continue,
         };
 
-        if !(index < hand.len()) {
+        if index >= hand.len() {
             continue;
         }
 
@@ -333,7 +332,7 @@ fn play_card(mut hand: Vec<Card>, Trick(mut cards): Trick) -> (Vec<Card>, Trick)
     (hand, Trick(cards))
 }
 
-fn playable_card_indices(hand: &Vec<Card>, Trick(cards): &Trick) -> Option<HashSet<usize>> {
+fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
     let first_card = match cards.first() {
         Some(card) => card,
         None => return None,
@@ -345,7 +344,7 @@ fn playable_card_indices(hand: &Vec<Card>, Trick(cards): &Trick) -> Option<HashS
             .filter_map(|(index, card)| (card.suit == first_card.suit).then_some(index)),
     );
 
-    (indices.len() > 0).then_some(indices)
+    (!indices.is_empty()).then_some(indices)
 }
 
 fn determine_winner(Trick(cards): &Trick) -> usize {
@@ -361,9 +360,7 @@ fn determine_winner(Trick(cards): &Trick) -> usize {
 
 fn score_round(mut player: PublicState) -> PublicState {
     if let Some(guess) = player.guess.filter(|g| *g == player.wins) {
-        player.score = player.score + (10 * guess).max(10)
-    } else {
-        player.score = player.score
+        player.score += (10 * guess).max(10)
     }
 
     player.wins = 0;
@@ -380,12 +377,14 @@ fn determine_total_winners(
     for (index, player) in players.iter().enumerate() {
         let player = public.get(player.name).unwrap();
 
-        if player.score > highest_score {
-            highest_score = player.score;
-            winners.push(index);
-        } else if player.score == highest_score {
-            winners.push(index);
-        }
+        match player.score.cmp(&highest_score) {
+            Ordering::Greater => {
+                highest_score = player.score;
+                winners.push(index);
+            }
+            Ordering::Equal => winners.push(index),
+            _ => {}
+        };
     }
 
     winners

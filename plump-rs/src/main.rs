@@ -64,10 +64,8 @@ impl Communicator for CommunicatorImpl {
 
 impl Drop for CommunicatorImpl {
     fn drop(&mut self) {
-        for (_, socket) in &self.sockets {
-            if let Some(socket) = socket {
-                _ = socket.shutdown(Shutdown::Both);
-            }
+        for socket in self.sockets.values().flatten() {
+            _ = socket.shutdown(Shutdown::Both);
         }
     }
 }
@@ -146,9 +144,8 @@ fn read_u32(prompt: &str) -> u32 {
     loop {
         let text = input(prompt).expect("Failed to read number");
 
-        match text.trim().parse() {
-            Ok(value) => return value,
-            Err(_) => {}
+        if let Ok(value) = text.trim().parse() {
+            return value;
         }
     }
 }

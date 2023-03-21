@@ -4,8 +4,8 @@ use itertools::Itertools;
 
 use crate::game::{Card, PublicState, Trick};
 
-const SUIT_SYMBOLS: [&'static str; 4] = ["♥", "♣", "♦", "♠"];
-const CARD_SYMBOLS: [&'static str; 13] = [
+const SUIT_SYMBOLS: [&str; 4] = ["♥", "♣", "♦", "♠"];
+const CARD_SYMBOLS: [&str; 13] = [
     "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A",
 ];
 
@@ -34,7 +34,7 @@ pub fn format_trick(Trick(cards): &Trick) -> Option<String> {
     const DARKENED: bool = false;
     const INDEX: Option<usize> = None;
 
-    (cards.len() > 0).then(|| {
+    (!cards.is_empty()).then(|| {
         cards
             .iter()
             .map(|c| format_card(c, DARKENED, INDEX))
@@ -55,7 +55,7 @@ pub fn format_hand(
                 None => false,
             };
 
-            let index = with_indices.then(|| index);
+            let index = with_indices.then_some(index);
             format_card(card, darkened, index)
         })
         .join(" ")
