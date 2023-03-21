@@ -1,3 +1,8 @@
+mod format;
+mod game;
+mod message;
+mod network;
+
 use std::{
     collections::HashMap,
     env::args,
@@ -6,16 +11,14 @@ use std::{
     str::FromStr,
 };
 
-use game::{create_players, game, Communicator};
 use itertools::Itertools;
-use network::{input, readline_with_prompt};
 use rand::seq::SliceRandom;
 
-use crate::network::send;
-
-mod format;
-mod game;
-mod network;
+use crate::{
+    game::{create_players, game, Communicator, Player},
+    message::Message,
+    network::{input, readline_with_prompt, send},
+};
 
 #[cfg(windows)]
 fn enable_colors() {
@@ -45,8 +48,8 @@ struct CommunicatorImpl {
 }
 
 impl Communicator for CommunicatorImpl {
-    fn write(&mut self, text: &str, name: Option<&str>) {
-        let line = text.to_owned() + "\n";
+    fn write(&mut self, message: Message, name: Option<&str>) {
+        let line = message.to_string() + "\n";
 
         if let Some(name) = name {
             send(self.sockets.get_mut(name).unwrap(), &line).expect("Failed to write")
@@ -119,8 +122,14 @@ fn main() -> IoResult<()> {
     let mut players = create_players(&player_names_and_types);
     let winners = game(&mut communicator, &mut players, num_rounds);
 
-    let winners_text = winners.into_iter().map(|i| players[i].name).join(", ");
-    communicator.write(&format!("The winner(s) is/are {winners_text}!"), None);
+    let players_vec: Vec<Player> = players.into_iter().collect_vec();
+    communicator.write(
+        Message::Winners {
+            players: &players_vec,
+            winner_indices: &winners,
+        },
+        None,
+    );
 
     Ok(())
 }

@@ -9,7 +9,7 @@ use itertools::{iproduct, Itertools};
 use proptest_derive::Arbitrary;
 use rand::seq::IteratorRandom;
 
-use crate::format::{format_guesses, format_hand, format_scoreboard, format_trick};
+use crate::message::Message;
 
 #[derive(Clone)]
 pub struct Player<'a> {
@@ -92,7 +92,7 @@ mod test {
 
 pub trait Communicator {
     fn read(&mut self, prompt: &str, player: &str) -> String;
-    fn write(&mut self, text: &str, player: Option<&str>);
+    fn write(&mut self, text: Message, player: Option<&str>);
 }
 
 pub fn game<C>(communicator: &mut C, players: &mut VecDeque<Player>, num_rounds: u32) -> Vec<usize>
@@ -126,22 +126,21 @@ where
         for player in &mut players_in_set {
             let hand;
             (deck, hand) = draw_hand(deck, set);
-            communicator.write(&format!("{}'s turn", player.name), None);
+            communicator.write(Message::Turn { whose: player }, None);
             let guess = match player.human {
-                true => request_guess(
-                    communicator,
-                    player.name,
-                    &hand,
-                    &prev_guesses,
-                    players.len(),
-                ),
+                true => request_guess(communicator, player, &hand, &prev_guesses, players.len()),
                 false => make_guess(&hand, &prev_guesses, players.len()),
             };
             public_state.get_mut(player.name).unwrap().guess = Some(guess);
             player.hand = hand;
             prev_guesses.push(guess);
         }
-        communicator.write(&format_guesses(&public_state), None);
+        communicator.write(
+            Message::Guesses {
+                state: &public_state,
+            },
+            None,
+        );
         let index = determine_start_player(&prev_guesses);
         players_in_set.rotate_left(index);
 
@@ -155,18 +154,23 @@ where
                 let hand;
                 if player.human {
                     (hand, trick) =
-                        play_human_card(communicator, player.name, player.hand.clone(), trick);
+                        play_human_card(communicator, player, player.hand.clone(), trick);
                 } else {
                     (hand, trick) = play_card(player.hand.clone(), trick)
                 }
                 player.hand = hand;
-                communicator.write(&format_trick(&trick).unwrap(), None);
+                communicator.write(Message::Trick(&trick), None);
             }
             let index = determine_winner(&trick);
-            let winner = players_in_set[index].name;
-            public_state.get_mut(winner).unwrap().wins += 1;
-            communicator.write(&format_scoreboard(&public_state), None);
-            communicator.write(&format!("{winner} won!"), None);
+            let winner = &players_in_set[index];
+            public_state.get_mut(winner.name).unwrap().wins += 1;
+            communicator.write(
+                Message::Scoreboard {
+                    state: &public_state,
+                },
+                None,
+            );
+            communicator.write(Message::Winner(winner), None);
             players_in_set.rotate_left(index);
         }
         for player in &players_in_set {
@@ -224,7 +228,7 @@ fn validate_guess(hand_size: usize, guesses: &Vec<u32>, players: usize, guess: u
 
 fn request_guess<C>(
     communicator: &mut C,
-    player: &str,
+    player: &Player,
     hand: &Vec<Card>,
     guesses: &Vec<u32>,
     players: usize,
@@ -232,19 +236,17 @@ fn request_guess<C>(
 where
     C: Communicator,
 {
-    const VALID_CARDS: Option<HashSet<usize>> = None;
-    const WITH_INDICES: bool = false;
+    let text = Message::RequestGuessContext {
+        player,
+        hand,
+        guesses,
+        players,
+    };
 
-    let hand_string = format_hand(hand, &VALID_CARDS, WITH_INDICES);
-    let guesses_string = guesses.iter().map(|i| i.to_string()).join(" ");
-
-    let text = format!(
-        "{player}: Hand: {hand_string}, Previous Guesses: {guesses_string}, Players: {players}"
-    );
-    communicator.write(&text, Some(player));
+    communicator.write(text, Some(player.name));
 
     loop {
-        let text = communicator.read("Please make a guess: ", player);
+        let text = communicator.read("Please make a guess: ", player.name);
         let guess: u32 = match text.trim().parse() {
             Ok(guess) => guess,
             Err(_) => continue,
@@ -265,7 +267,7 @@ fn determine_start_player(guesses: &[u32]) -> usize {
 
 fn play_human_card<C>(
     communicator: &mut C,
-    player: &str,
+    player: &Player,
     mut hand: Vec<Card>,
     trick: Trick,
 ) -> (Vec<Card>, Trick)
@@ -273,29 +275,25 @@ where
     C: Communicator,
 {
     hand = hand.into_iter().sorted().collect();
-
-    const WITH_INDICES: bool = true;
     let valid_cards = playable_card_indices(&hand, &trick);
-    let hand_string = format_hand(&hand, &valid_cards, WITH_INDICES);
 
-    let trick_string = format_trick(&trick);
-    let state = match trick_string {
-        Some(text) => "Trick: ".to_owned() + &text,
-        None => "You go first!".to_owned(),
+    let turn_string = Message::Turn { whose: player };
+    communicator.write(turn_string, None);
+
+    let request_context = Message::PlayRequestContext {
+        player,
+        hand: &hand,
+        trick: &trick,
     };
 
-    communicator.write(&format!("{player}'s turn"), None);
-    communicator.write(
-        &format!("{player}: Hand: {hand_string}, {state}"),
-        Some(player),
-    );
+    communicator.write(request_context, Some(player.name));
 
     let Trick(mut cards) = trick;
 
     loop {
         let text = communicator.read(
-            &format!("{player}: Select card to play (leftmost is 0): "),
-            player,
+            &format!("{}: Select card to play (leftmost is 0): ", &player.name),
+            player.name,
         );
 
         let index: usize = match text.trim().parse() {
@@ -332,7 +330,7 @@ fn play_card(mut hand: Vec<Card>, Trick(mut cards): Trick) -> (Vec<Card>, Trick)
     (hand, Trick(cards))
 }
 
-fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
+pub fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
     let first_card = match cards.first() {
         Some(card) => card,
         None => return None,
