@@ -7,13 +7,12 @@ use std::{
     collections::HashMap,
     env::args,
     io::Result as IoResult,
-    net::{Shutdown, SocketAddr, TcpListener, TcpStream},
+    net::{Shutdown, SocketAddr, TcpListener},
     str::FromStr,
 };
 
 use game::PlayerName;
 use itertools::Itertools;
-use network::{readline_from_remote, send_to_remote};
 use rand::seq::SliceRandom;
 
 use crate::{
@@ -45,43 +44,8 @@ fn enable_colors() {
     }
 }
 
-enum Client {
-    Local,
-    Remote(TcpStream),
-}
-
-impl Client {
-    fn send(&mut self, prompt: &str) -> IoResult<()> {
-        match self {
-            Client::Remote(socket) => send_to_remote(socket, prompt.into()),
-            Client::Local => {
-                print!("{}", prompt);
-                Ok(())
-            }
-        }
-    }
-
-    fn readline(&mut self) -> IoResult<String> {
-        let text = match self {
-            Client::Local => input(""),
-            Client::Remote(socket) => readline_from_remote(socket),
-        }?;
-
-        Ok(text.trim().to_owned())
-    }
-
-    fn readline_with_prompt(&mut self, prompt: &str) -> IoResult<String> {
-        self.send(prompt)?;
-        self.readline()
-    }
-
-    fn get_player_name(&mut self) -> IoResult<String> {
-        self.readline_with_prompt("Please input player name: ")
-    }
-}
-
 struct CommunicatorImpl {
-    sockets: HashMap<String, Client>,
+    sockets: HashMap<String, network::Client>,
 }
 
 impl Communicator for CommunicatorImpl {
@@ -109,8 +73,8 @@ impl Drop for CommunicatorImpl {
     fn drop(&mut self) {
         for socket in self.sockets.values() {
             match socket {
-                Client::Local => {}
-                Client::Remote(socket) => _ = socket.shutdown(Shutdown::Both),
+                network::Client::Local => {}
+                network::Client::Remote(socket) => _ = socket.shutdown(Shutdown::Both),
             };
         }
     }
@@ -136,12 +100,12 @@ fn main() -> IoResult<()> {
         .map(|_| (get_random_name(), false))
         .collect();
 
-    let mut client_sockets = HashMap::<String, Client>::new();
+    let mut client_sockets = HashMap::<String, network::Client>::new();
     let address = SocketAddr::from_str(&format!("0.0.0.0:{PORT}")).expect("Unknown socket address");
 
     {
         let listener = TcpListener::bind(address).expect("Failed to create listener socket");
-        let mut local_client = Client::Local;
+        let mut local_client = network::Client::Local;
 
         let name = local_client.get_player_name()?;
         client_sockets.insert(name.clone(), local_client);
@@ -149,7 +113,7 @@ fn main() -> IoResult<()> {
 
         for i in 0..(num_players.max(1) - 1) {
             let mut remote_client = match listener.incoming().next().unwrap() {
-                Ok(stream) => Client::Remote(stream),
+                Ok(stream) => network::Client::Remote(stream),
                 Err(_) => continue,
             };
 
