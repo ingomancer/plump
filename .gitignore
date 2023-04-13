@@ -1,13 +1,3 @@
-__pycache__
 .vscode/*
 !.vscode/extensions.json
-# Ignore files cached by Hypothesis...
-.hypothesis/*
-# except for the examples directory
-!.hypothesis/examples/
-# Ignore unittest coverage output
-.coverage
-# Ignore venv file
-.venv
-# Ignore rust build output
 /target
