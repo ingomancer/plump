@@ -20,9 +20,6 @@ jobs:
     - name: Cargo version
       run: cargo --version --verbose
 
-    - name: Rustup version
-      run: Rustup --version --verbose
-
     - name: Run tests
       run: cargo test
 
