@@ -38,7 +38,7 @@ fn enable_colors() {
         let result = unsafe { GetConsoleMode(handle, &mut mode) };
 
         result.as_bool().then(|| {
-            mode = mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
             unsafe { SetConsoleMode(handle, mode) }.expect("Failed to set console mode")
         });
     }
@@ -49,23 +49,20 @@ struct CommunicatorImpl {
 }
 
 impl Communicator for CommunicatorImpl {
-    fn read(&mut self, name: PlayerName, prompt: &str) -> String {
+    fn read(&mut self, name: PlayerName, prompt: Message) -> String {
         let client = self.sockets.get_mut(name.as_str()).unwrap();
         client.readline_with_prompt(prompt).expect("Failed to read")
     }
 
     fn write_to_all(&mut self, message: Message) {
-        let line = message.to_string() + "\n";
-
         for client in self.sockets.values_mut() {
-            client.send(&line).expect("Failed to write")
+            client.send(message).expect("Failed to write")
         }
     }
 
     fn write_to_one(&mut self, name: PlayerName, message: Message) {
-        let line = message.to_string() + "\n";
         let client = &mut self.sockets.get_mut(name.as_str()).unwrap();
-        client.send(&line).expect("Failed to write")
+        client.send(message).expect("Failed to write")
     }
 }
 
@@ -74,7 +71,9 @@ impl Drop for CommunicatorImpl {
         for socket in self.sockets.values() {
             match socket {
                 network::Client::Local => {}
-                network::Client::Remote(socket) => _ = socket.shutdown(Shutdown::Both),
+                network::Client::RemoteText(socket) | network::Client::RemoteJson(socket) => {
+                    _ = socket.shutdown(Shutdown::Both)
+                }
             };
         }
     }
@@ -113,11 +112,14 @@ fn main() -> IoResult<()> {
 
         for i in 0..(num_players.max(1) - 1) {
             let mut remote_client = match listener.incoming().next().unwrap() {
-                Ok(stream) => network::Client::Remote(stream),
+                Ok(stream) => network::Client::RemoteText(stream),
                 Err(_) => continue,
             };
 
             let name = remote_client.get_player_name()?;
+            if name.starts_with('|') {
+                remote_client = remote_client.into_remote_json().unwrap();
+            }
             client_sockets.insert(name.clone(), remote_client);
             player_names_and_types[i as usize] = (name, true);
         }

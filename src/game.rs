@@ -8,10 +8,11 @@ use itertools::{iproduct, Itertools};
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 use rand::seq::IteratorRandom;
+use serde::Serialize;
 
 use crate::message::Message;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct PlayerName<'a>(&'a str);
 
 impl<'a> PlayerName<'a> {
@@ -20,21 +21,21 @@ impl<'a> PlayerName<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct Player<'a> {
     pub name: PlayerName<'a>,
     pub human: bool,
     pub hand: Vec<Card>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Debug, Serialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Card {
     pub suit: u32,
     pub value: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct Trick(pub Vec<Card>);
 
 impl Trick {
@@ -43,7 +44,7 @@ impl Trick {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize)]
 pub struct PublicState {
     pub guess: Option<u32>,
     pub wins: u32,
@@ -89,7 +90,7 @@ mod test {
         fn test_draw_hand((deck, hand_size) in deck_and_hand_size()) {
             let (new_deck, hand) = draw_hand(deck.clone(), hand_size as _);
             prop_assert!(new_deck.is_subset(&deck));
-            prop_assert!(hand.len() == hand_size as _ );
+            prop_assert!(hand.len() == hand_size as usize);
             prop_assert!(new_deck.len() + hand_size as usize == deck.len());
             let hand_set: HashSet<Card> = hand.into_iter().collect();
             prop_assert!(hand_set.is_subset(&deck));
@@ -104,7 +105,7 @@ mod test {
 }
 
 pub trait Communicator {
-    fn read(&mut self, player: PlayerName, prompt: &str) -> String;
+    fn read(&mut self, player: PlayerName, prompt: Message) -> String;
     fn write_to_all(&mut self, text: Message);
     fn write_to_one(&mut self, player: PlayerName, text: Message);
 }
@@ -255,7 +256,7 @@ where
     );
 
     loop {
-        let text = communicator.read(player.name, "Please make a guess: ");
+        let text = communicator.read(player.name, Message::RequestGuess);
         let guess: u32 = match text.trim().parse() {
             Ok(guess) => guess,
             Err(_) => continue,
@@ -300,13 +301,7 @@ where
     let Trick(mut cards) = trick;
 
     loop {
-        let text = communicator.read(
-            player.name,
-            &format!(
-                "{}: Select card to play (leftmost is 0): ",
-                player.name.as_str()
-            ),
-        );
+        let text = communicator.read(player.name, Message::PlayRequest(player));
 
         let index: usize = match text.trim().parse() {
             Ok(value) => value,

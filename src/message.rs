@@ -1,5 +1,8 @@
+use serde::Serialize;
+
 use crate::game::{Card, Player, StatePerPlayer, Trick};
 
+#[derive(Serialize, Copy, Clone)]
 pub enum Message<'a> {
     RequestGuessContext {
         player: &'a Player<'a>,
@@ -34,4 +37,7 @@ pub enum Message<'a> {
         players: &'a [Player<'a>],
         winner_indices: &'a [usize],
     },
+    RequestPlayerName,
+    PlayRequest(&'a Player<'a>),
+    RequestGuess,
 }

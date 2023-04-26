@@ -134,6 +134,10 @@ fn format_request_guess_context(
     )
 }
 
+fn format_request_guess() -> String {
+    "Please make a guess: ".to_owned()
+}
+
 fn format_play_request_context(player: &Player, hand: &[Card], trick: &Trick) -> String {
     const WITH_INDICES: bool = true;
     let valid_cards = playable_card_indices(hand, trick);
@@ -143,9 +147,20 @@ fn format_play_request_context(player: &Player, hand: &[Card], trick: &Trick) ->
     format!("{}: Hand: {hand_string}, {state}", player.name.as_str())
 }
 
+fn format_play_request(player: &Player) -> String {
+    format!(
+        "{}: Select card to play (leftmost is 0): ",
+        player.name.as_str()
+    )
+}
+
 fn format_winners(players: &[Player], winners: &[usize]) -> String {
     let winners_text = winners.iter().map(|i| players[*i].name.as_str()).join(", ");
     format!("The winner(s) is/are {winners_text}!")
+}
+
+fn format_request_player_name() -> String {
+    "Please input player name: ".to_owned()
 }
 
 impl<'a> ToString for Message<'a> {
@@ -178,6 +193,9 @@ impl<'a> ToString for Message<'a> {
                 players,
                 winner_indices,
             } => format_winners(players, winner_indices),
+            Message::RequestPlayerName => format_request_player_name(),
+            Message::PlayRequest(player) => format_play_request(player),
+            Message::RequestGuess => format_request_guess(),
         }
     }
 }

@@ -3,6 +3,8 @@ use std::{
     net::TcpStream,
 };
 
+use crate::message::Message;
+
 pub fn input(prompt: &str) -> IoResult<String> {
     print!("{}", prompt);
     stdout().flush()?;
@@ -41,15 +43,21 @@ fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
 
 pub(crate) enum Client {
     Local,
-    Remote(TcpStream),
+    RemoteText(TcpStream),
+    RemoteJson(TcpStream),
 }
 
 impl Client {
-    pub(crate) fn send(&mut self, prompt: &str) -> IoResult<()> {
+    pub(crate) fn send(&mut self, msg: Message) -> IoResult<()> {
         match self {
-            Client::Remote(socket) => send_to_remote(socket, prompt.into()),
+            Client::RemoteText(socket) => send_to_remote(socket, msg.to_string() + "\n"),
+            Client::RemoteJson(socket) => {
+                let line = serde_json::to_string(&msg).unwrap();
+                let line = format!("{},{}", line.len(), line);
+                send_to_remote(socket, line)
+            }
             Client::Local => {
-                print!("{}", prompt);
+                print!("{}", msg.to_string() + "\n");
                 Ok(())
             }
         }
@@ -58,18 +66,27 @@ impl Client {
     pub(crate) fn readline(&mut self) -> IoResult<String> {
         let text = match self {
             Client::Local => input(""),
-            Client::Remote(socket) => readline_from_remote(socket),
+            Client::RemoteText(socket) => readline_from_remote(socket),
+            Client::RemoteJson(socket) => readline_from_remote(socket),
         }?;
 
         Ok(text.trim().to_owned())
     }
 
-    pub(crate) fn readline_with_prompt(&mut self, prompt: &str) -> IoResult<String> {
+    pub(crate) fn readline_with_prompt(&mut self, prompt: Message) -> IoResult<String> {
         self.send(prompt)?;
         self.readline()
     }
 
     pub(crate) fn get_player_name(&mut self) -> IoResult<String> {
-        self.readline_with_prompt("Please input player name: ")
+        self.readline_with_prompt(Message::RequestPlayerName)
+    }
+
+    pub(crate) fn into_remote_json(self) -> Option<Client> {
+        match self {
+            Client::RemoteText(socket) => Some(Client::RemoteJson(socket)),
+            Client::Local => None,
+            Client::RemoteJson(_) => Some(self),
+        }
     }
 }
