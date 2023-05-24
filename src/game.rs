@@ -222,7 +222,7 @@ fn draw_hand(deck: HashSet<Card>, num: u32) -> (HashSet<Card>, Vec<Card>) {
     );
     (
         deck.difference(&hand).copied().collect(),
-        hand.into_iter().collect(),
+        hand.into_iter().sorted().collect(),
     )
 }
 
@@ -300,7 +300,6 @@ fn play_human_card<C>(
 where
     C: Communicator,
 {
-    hand = hand.into_iter().sorted().collect();
     let valid_cards = playable_card_indices(&hand, &trick);
 
     communicator.write_to_all(Message::Turn { whose: player });
