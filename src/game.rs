@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::message::Message;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Debug)]
 pub struct PlayerName<'a>(&'a str);
 
 impl<'a> PlayerName<'a> {
@@ -81,8 +81,8 @@ mod test {
             let players = create_players(&names);
             prop_assert!(players.len() == names.len());
             for ((name, human), player) in names.iter().zip(players.iter()) {
-                prop_assert!(PlayerName(name) == player.name);
-                prop_assert!(human == &player.human);
+                prop_assert_eq!(PlayerName(name), player.name);
+                prop_assert_eq!(human, &player.human);
             }
         }
 
@@ -90,8 +90,8 @@ mod test {
         fn test_draw_hand((deck, hand_size) in deck_and_hand_size()) {
             let (new_deck, hand) = draw_hand(deck.clone(), hand_size as _);
             prop_assert!(new_deck.is_subset(&deck));
-            prop_assert!(hand.len() == hand_size as usize);
-            prop_assert!(new_deck.len() + hand_size as usize == deck.len());
+            prop_assert_eq!(hand.len(), hand_size as usize);
+            prop_assert_eq!(new_deck.len() + hand_size as usize, deck.len());
             let hand_set: HashSet<Card> = hand.into_iter().collect();
             prop_assert!(hand_set.is_subset(&deck));
         }
@@ -100,7 +100,23 @@ mod test {
     #[test]
     fn test_create_deck() {
         let deck = create_deck();
-        assert!(deck.len() == 52);
+        assert_eq!(deck.len(), 52);
+    }
+
+    #[test]
+    fn test_determine_winner() {
+        let trick = Trick(vec![Card{suit: 0, value: 1}, Card{suit: 1, value: 10}, Card{suit: 0, value: 7}]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 2);
+        let trick = Trick(vec![Card{suit: 1, value: 1}, Card{suit: 1, value: 10}, Card{suit: 0, value: 7}]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 1);
+        let trick = Trick(vec![Card{suit: 3, value: 1}, Card{suit: 1, value: 10}, Card{suit: 0, value: 7}]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 0);
+        let trick = Trick(vec![Card{suit: 0, value: 1}, Card{suit: 0, value: 10}, Card{suit: 0, value: 11}]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 2);
     }
 }
 
@@ -358,8 +374,7 @@ fn determine_winner(Trick(cards): &Trick) -> usize {
 
     cards
         .iter()
-        .filter(|c| c.suit == first_suit)
-        .position_max_by_key(|c| c.value)
+        .position_max_by_key(|c| if c.suit == first_suit { c.value } else {0})
         .unwrap()
 }
 
