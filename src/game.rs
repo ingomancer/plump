@@ -105,16 +105,32 @@ mod test {
 
     #[test]
     fn test_determine_winner() {
-        let trick = Trick(vec![Card{suit: 0, value: 1}, Card{suit: 1, value: 10}, Card{suit: 0, value: 7}]);
+        let trick = Trick(vec![
+            Card { suit: 0, value: 1 },
+            Card { suit: 1, value: 10 },
+            Card { suit: 0, value: 7 },
+        ]);
         let winner = determine_winner(&trick);
         assert_eq!(winner, 2);
-        let trick = Trick(vec![Card{suit: 1, value: 1}, Card{suit: 1, value: 10}, Card{suit: 0, value: 7}]);
+        let trick = Trick(vec![
+            Card { suit: 1, value: 1 },
+            Card { suit: 1, value: 10 },
+            Card { suit: 0, value: 7 },
+        ]);
         let winner = determine_winner(&trick);
         assert_eq!(winner, 1);
-        let trick = Trick(vec![Card{suit: 3, value: 1}, Card{suit: 1, value: 10}, Card{suit: 0, value: 7}]);
+        let trick = Trick(vec![
+            Card { suit: 3, value: 1 },
+            Card { suit: 1, value: 10 },
+            Card { suit: 0, value: 7 },
+        ]);
         let winner = determine_winner(&trick);
         assert_eq!(winner, 0);
-        let trick = Trick(vec![Card{suit: 0, value: 1}, Card{suit: 0, value: 10}, Card{suit: 0, value: 11}]);
+        let trick = Trick(vec![
+            Card { suit: 0, value: 1 },
+            Card { suit: 0, value: 10 },
+            Card { suit: 0, value: 11 },
+        ]);
         let winner = determine_winner(&trick);
         assert_eq!(winner, 2);
     }
@@ -373,7 +389,7 @@ fn determine_winner(Trick(cards): &Trick) -> usize {
 
     cards
         .iter()
-        .position_max_by_key(|c| if c.suit == first_suit { c.value } else {0})
+        .position_max_by_key(|c| if c.suit == first_suit { c.value } else { 0 })
         .unwrap()
 }
 

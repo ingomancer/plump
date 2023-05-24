@@ -61,7 +61,10 @@ fn format_hand(hand: &[Card], valid_cards: &Option<HashSet<usize>>, with_indices
 }
 
 fn format_guess(state: &PublicState) -> String {
-    state.guess.map(|g| g.to_string()).unwrap_or("?".into())
+    state
+        .guess
+        .map(|g| g.to_string())
+        .unwrap_or_else(|| "?".into())
 }
 
 fn format_guesses(state: &StatePerPlayer) -> String {
