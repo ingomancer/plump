@@ -6,7 +6,7 @@ use std::{
 use crate::message::Message;
 
 pub fn input(prompt: &str) -> IoResult<String> {
-    print!("{}", prompt);
+    print!("{prompt}");
     stdout().flush()?;
 
     let mut result = String::new();
