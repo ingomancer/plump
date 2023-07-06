@@ -5,12 +5,12 @@ mod network;
 
 use std::{
     collections::HashMap,
-    env::args,
     io::Result as IoResult,
     net::{Shutdown, SocketAddr, TcpListener},
     str::FromStr,
 };
 
+use clap::Parser;
 use game::PlayerName;
 use itertools::Itertools;
 use rand::seq::SliceRandom;
@@ -18,7 +18,6 @@ use rand::seq::SliceRandom;
 use crate::{
     game::{create_players, game, Communicator, Player},
     message::Message,
-    network::input,
 };
 
 #[cfg(windows)]
@@ -79,16 +78,25 @@ impl Drop for CommunicatorImpl {
     }
 }
 
+#[derive(Parser)]
+struct Args {
+    #[arg(long, default_value = "4", value_parser = clap::value_parser!(u32).range(2..5))]
+    players: u32,
+    #[arg(long, conflicts_with = "local_robot")]
+    local_player: bool,
+    #[arg(long)]
+    local_robot: bool,
+    #[arg(long, default_value = "9999")]
+    port: u16,
+}
+
 fn main() -> IoResult<()> {
-    const PORT: u16 = 9999;
+    let args = Args::parse();
 
     #[cfg(windows)]
     enable_colors();
 
-    let num_players = match args().nth(1).map(|s| s.parse()) {
-        Some(Ok(value)) => value,
-        _ => read_u32("Number of players: "),
-    };
+    let num_players = args.players;
 
     let num_rounds = match num_players < 6 {
         true => 10,
@@ -100,17 +108,25 @@ fn main() -> IoResult<()> {
         .collect();
 
     let mut client_sockets = HashMap::<String, network::Client>::new();
-    let address = SocketAddr::from_str(&format!("0.0.0.0:{PORT}")).expect("Unknown socket address");
+    let address =
+        SocketAddr::from_str(&format!("0.0.0.0:{}", args.port)).expect("Unknown socket address");
 
     {
         let listener = TcpListener::bind(address).expect("Failed to create listener socket");
-        let mut local_client = network::Client::Local;
 
-        let name = local_client.get_player_name()?;
-        client_sockets.insert(name.clone(), local_client);
-        player_names_and_types.push((name, true));
+        let remote_players;
+        if args.local_player || args.local_robot {
+            remote_players = num_players - 1;
 
-        for i in 0..(num_players.max(1) - 1) {
+            let mut local_client = network::Client::Local;
+            let name = local_client.get_player_name()?;
+            client_sockets.insert(name.clone(), local_client);
+            player_names_and_types.push((name, args.local_player));
+        } else {
+            remote_players = num_players;
+        }
+
+        for i in 0..(remote_players) {
             let mut remote_client = match listener.incoming().next().unwrap() {
                 Ok(stream) => network::Client::RemoteText(stream),
                 Err(_) => continue,
@@ -150,14 +166,4 @@ fn get_random_name() -> String {
     let prefix = &chars[0..3];
     let suffix = &chars[3..];
     format!("{prefix}-{suffix}").to_uppercase()
-}
-
-fn read_u32(prompt: &str) -> u32 {
-    loop {
-        let text = input(prompt).expect("Failed to read number");
-
-        if let Ok(value) = text.trim().parse() {
-            return value;
-        }
-    }
 }

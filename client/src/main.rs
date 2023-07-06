@@ -1,11 +1,6 @@
-use std::{
-    env::args,
-    io::Error as IoError,
-    net::{AddrParseError, IpAddr},
-    result::Result as StdResult,
-    str::FromStr,
-};
+use std::{io::Error as IoError, net::IpAddr, result::Result as StdResult};
 
+use clap::Parser;
 use tokio::{
     io::{copy, stdin, stdout},
     net::TcpStream,
@@ -17,23 +12,23 @@ enum Error {
     Connect(IoError),
     Copy(IoError),
     Join(JoinError),
-    NoIpAdressGiven,
-    ParseAddress(AddrParseError),
 }
 
 type Result<T> = StdResult<T, Error>;
 
+#[derive(Parser)]
+struct Args {
+    #[arg(long, default_value = "127.0.0.1")]
+    address: IpAddr,
+    #[arg(long, default_value = "9999")]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    const PORT: u16 = 9999;
+    let args = Args::parse();
 
-    let address = match args().nth(1) {
-        Some(text) => text,
-        None => return Err(Error::NoIpAdressGiven),
-    };
-
-    let ip_addr = IpAddr::from_str(address.trim()).map_err(Error::ParseAddress)?;
-    let socket = TcpStream::connect((ip_addr, PORT))
+    let socket = TcpStream::connect((args.address, args.port))
         .await
         .map_err(Error::Connect)?;
 
