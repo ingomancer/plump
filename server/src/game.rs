@@ -140,6 +140,7 @@ pub trait Communicator {
     fn read(&mut self, player: PlayerName, prompt: Message) -> String;
     fn write_to_all(&mut self, text: Message);
     fn write_to_one(&mut self, player: PlayerName, text: Message);
+    fn wait_for_reconnect(&mut self, player: &str);
 }
 
 pub fn game<C>(communicator: &mut C, players: &mut VecDeque<Player>, num_rounds: u32) -> Vec<usize>
@@ -353,7 +354,7 @@ where
         hand.retain(|c| *c != card);
         cards.push(card);
 
-        return (hand, Trick(cards));
+        return (hand, Trick(cards.to_vec()));
     }
 }
 

@@ -8,6 +8,7 @@ use std::{
     io::Result as IoResult,
     net::{Shutdown, SocketAddr, TcpListener},
     str::FromStr,
+    time::Duration,
 };
 
 use clap::Parser;
@@ -45,23 +46,61 @@ fn enable_colors() {
 
 struct CommunicatorImpl {
     sockets: HashMap<String, network::Client>,
+    listener: TcpListener,
 }
 
 impl Communicator for CommunicatorImpl {
     fn read(&mut self, name: PlayerName, prompt: Message) -> String {
-        let client = self.sockets.get_mut(name.as_str()).unwrap();
-        client.readline_with_prompt(prompt).expect("Failed to read")
+        loop {
+            {
+                let client = self.sockets.get_mut(name.as_str()).unwrap();
+                if let Ok(res) = client.readline_with_prompt(prompt) {
+                    break res;
+                }
+            }
+            self.wait_for_reconnect(name.as_str());
+        }
     }
 
     fn write_to_all(&mut self, message: Message) {
-        for client in self.sockets.values_mut() {
-            client.send(message).expect("Failed to write")
+        for name in self.sockets.keys().cloned().collect::<Vec<String>>() {
+            loop {
+                {
+                    let client = self.sockets.get_mut(name.as_str()).unwrap();
+                    if client.send(message).is_ok() {
+                        break;
+                    }
+                }
+                self.wait_for_reconnect(name.as_str());
+            }
         }
     }
 
     fn write_to_one(&mut self, name: PlayerName, message: Message) {
-        let client = &mut self.sockets.get_mut(name.as_str()).unwrap();
-        client.send(message).expect("Failed to write")
+        loop {
+            {
+                let client = self.sockets.get_mut(name.as_str()).unwrap();
+                if client.send(message).is_ok() {
+                    break;
+                }
+            }
+            self.wait_for_reconnect(name.as_str());
+        }
+    }
+
+    fn wait_for_reconnect(&mut self, player: &str) {
+        let remote_client;
+        println!("Player {player} has disconnected, waiting for rejoin");
+        loop {
+            remote_client = match self.listener.incoming().next().unwrap() {
+                Ok(stream) => network::Client::RemoteText(stream),
+                Err(_) => continue,
+            };
+            break;
+        }
+        if let Some(client) = self.sockets.get_mut(player) {
+            *client = remote_client;
+        }
     }
 }
 
@@ -110,39 +149,41 @@ fn main() -> IoResult<()> {
     let mut client_sockets = HashMap::<String, network::Client>::new();
     let address =
         SocketAddr::from_str(&format!("0.0.0.0:{}", args.port)).expect("Unknown socket address");
+    let listener = TcpListener::bind(address).expect("Failed to create listener socket");
 
-    {
-        let listener = TcpListener::bind(address).expect("Failed to create listener socket");
+    let remote_players;
+    if args.local_player || args.local_robot {
+        remote_players = num_players - 1;
 
-        let remote_players;
-        if args.local_player || args.local_robot {
-            remote_players = num_players - 1;
+        let mut local_client = network::Client::Local;
+        let name = local_client.get_player_name()?;
+        client_sockets.insert(name.clone(), local_client);
+        player_names_and_types.push((name, args.local_player));
+    } else {
+        remote_players = num_players;
+    }
 
-            let mut local_client = network::Client::Local;
-            let name = local_client.get_player_name()?;
-            client_sockets.insert(name.clone(), local_client);
-            player_names_and_types.push((name, args.local_player));
-        } else {
-            remote_players = num_players;
-        }
-
-        for i in 0..(remote_players) {
-            let mut remote_client = match listener.incoming().next().unwrap() {
-                Ok(stream) => network::Client::RemoteText(stream),
-                Err(_) => continue,
-            };
-
-            let name = remote_client.get_player_name()?;
-            if name.starts_with('|') {
-                remote_client = remote_client.into_remote_json().unwrap();
+    for i in 0..(remote_players) {
+        let mut remote_client = match listener.incoming().next().unwrap() {
+            Ok(stream) => {
+                stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+                stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+                network::Client::RemoteText(stream)
             }
-            client_sockets.insert(name.clone(), remote_client);
-            player_names_and_types[i as usize] = (name, true);
+            Err(_) => continue,
+        };
+
+        let name = remote_client.get_player_name()?;
+        if name.starts_with('|') {
+            remote_client = remote_client.into_remote_json().unwrap();
         }
+        client_sockets.insert(name.clone(), remote_client);
+        player_names_and_types[i as usize] = (name, true);
     }
 
     let mut communicator = CommunicatorImpl {
         sockets: client_sockets,
+        listener,
     };
 
     let mut players = create_players(&player_names_and_types);

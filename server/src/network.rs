@@ -1,9 +1,8 @@
+use crate::message::Message;
 use std::{
     io::{stdin, stdout, Error as IoError, ErrorKind, Read, Result as IoResult, Write},
     net::TcpStream,
 };
-
-use crate::message::Message;
 
 pub fn input(prompt: &str) -> IoResult<String> {
     print!("{prompt}");
@@ -19,6 +18,12 @@ fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
     while !data.is_empty() {
         let sent = socket.write(&data)?;
+        if sent == 0 {
+            return Err(IoError::new(
+                ErrorKind::WriteZero,
+                "Remote socket was closed",
+            ));
+        }
         data.drain(0..sent);
     }
 
@@ -31,6 +36,12 @@ fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
     loop {
         let mut buffer = [0u8; 1024];
         let received = socket.read(&mut buffer)?;
+        if received == 0 {
+            return Err(IoError::new(
+                ErrorKind::UnexpectedEof,
+                "Remote socket has been closed",
+            ));
+        }
         all.extend_from_slice(&buffer[0..received]);
 
         if all.last() != Some(&NEWLINE) {
