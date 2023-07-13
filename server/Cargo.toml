@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.3.10", features = ["derive", "std"], default-features = false }
+clap = { version = "4.3.10", features = [
+    "derive",
+    "std",
+], default-features = false }
 itertools = "0.10.5"
 rand = { features = ["std_rng"], default-features = false, version = "0.8.5" }
 serde = { version = "1.0.160", features = [

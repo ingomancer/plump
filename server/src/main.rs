@@ -14,7 +14,6 @@ use std::{
 use clap::Parser;
 use game::PlayerName;
 use itertools::Itertools;
-use rand::seq::SliceRandom;
 
 use crate::{
     game::{create_players, game, Communicator, Player},
@@ -110,7 +109,7 @@ impl Drop for CommunicatorImpl {
             match socket {
                 network::Client::Local => {}
                 network::Client::RemoteText(socket) | network::Client::RemoteJson(socket) => {
-                    _ = socket.shutdown(Shutdown::Both)
+                    _ = socket.shutdown(Shutdown::Both);
                 }
             };
         }
@@ -119,8 +118,8 @@ impl Drop for CommunicatorImpl {
 
 #[derive(Parser)]
 struct Args {
-    #[arg(long, default_value = "4", value_parser = clap::value_parser!(u32).range(2..5))]
-    players: u32,
+    #[arg(long, default_value = "4")]
+    players: usize,
     #[arg(long, conflicts_with = "local_robot")]
     local_player: bool,
     #[arg(long)]
@@ -137,14 +136,13 @@ fn main() -> IoResult<()> {
 
     let num_players = args.players;
 
-    let num_rounds = match num_players < 6 {
-        true => 10,
-        false => 52 / num_players,
+    let num_rounds = if num_players < 6 {
+        10
+    } else {
+        52 / num_players
     };
 
-    let mut player_names_and_types: Vec<(String, bool)> = (0..(num_players.max(1) - 1))
-        .map(|_| (get_random_name(), false))
-        .collect();
+    let mut player_names_and_types: Vec<(String, bool)> = vec![];
 
     let mut client_sockets = HashMap::<String, network::Client>::new();
     let address =
@@ -163,7 +161,7 @@ fn main() -> IoResult<()> {
         remote_players = num_players;
     }
 
-    for i in 0..(remote_players) {
+    for _ in 0..(remote_players) {
         let mut remote_client = match listener.incoming().next().unwrap() {
             Ok(stream) => {
                 stream.set_read_timeout(Some(Duration::from_secs(5)))?;
@@ -178,7 +176,7 @@ fn main() -> IoResult<()> {
             remote_client = remote_client.into_remote_json().unwrap();
         }
         client_sockets.insert(name.clone(), remote_client);
-        player_names_and_types[i as usize] = (name, true);
+        player_names_and_types.push((name, true));
     }
 
     let mut communicator = CommunicatorImpl {
@@ -196,15 +194,4 @@ fn main() -> IoResult<()> {
     });
 
     Ok(())
-}
-
-fn get_random_name() -> String {
-    let choices: Vec<char> = "0123456789abcdef".chars().collect();
-    let chars: String = (0..7)
-        .map(|_| choices.choose(&mut rand::thread_rng()).unwrap())
-        .collect();
-
-    let prefix = &chars[0..3];
-    let suffix = &chars[3..];
-    format!("{prefix}-{suffix}").to_uppercase()
 }

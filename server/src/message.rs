@@ -7,7 +7,7 @@ pub enum Message<'a> {
     RequestGuessContext {
         player: &'a Player<'a>,
         hand: &'a [Card],
-        guesses: &'a [u32],
+        guesses: &'a [usize],
         players: usize,
     },
 

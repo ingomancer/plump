@@ -77,8 +77,7 @@ impl Client {
     pub(crate) fn readline(&mut self) -> IoResult<String> {
         let text = match self {
             Client::Local => input(""),
-            Client::RemoteText(socket) => readline_from_remote(socket),
-            Client::RemoteJson(socket) => readline_from_remote(socket),
+            Client::RemoteText(socket) | Client::RemoteJson(socket) => readline_from_remote(socket),
         }?;
 
         Ok(text.trim().to_owned())

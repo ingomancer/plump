@@ -31,8 +31,8 @@ pub struct Player<'a> {
 #[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Debug, Serialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Card {
-    pub suit: u32,
-    pub value: u32,
+    pub suit: usize,
+    pub value: usize,
 }
 
 #[derive(Clone, Serialize)]
@@ -46,9 +46,9 @@ impl Trick {
 
 #[derive(Clone, Copy, Serialize)]
 pub struct PublicState {
-    pub guess: Option<u32>,
-    pub wins: u32,
-    pub score: u32,
+    pub guess: Option<usize>,
+    pub wins: usize,
+    pub score: usize,
 }
 
 pub fn create_players(player_names: &Vec<(String, bool)>) -> VecDeque<Player> {
@@ -68,10 +68,10 @@ mod test {
     use super::*;
     use proptest::prelude::*;
 
-    fn deck_and_hand_size() -> impl Strategy<Value = (HashSet<Card>, u8)> {
+    fn deck_and_hand_size() -> impl Strategy<Value = (HashSet<Card>, usize)> {
         any::<HashSet<Card>>().prop_flat_map(|deck| {
             let len = deck.len();
-            (Just(deck), 0..(len + 1) as u8)
+            (Just(deck), 0..=len)
         })
     }
 
@@ -88,10 +88,10 @@ mod test {
 
         #[test]
         fn test_draw_hand((deck, hand_size) in deck_and_hand_size()) {
-            let (new_deck, hand) = draw_hand(deck.clone(), hand_size as _);
+            let (new_deck, hand) = draw_hand(deck.clone(), hand_size);
             prop_assert!(new_deck.is_subset(&deck));
-            prop_assert_eq!(hand.len(), hand_size as usize);
-            prop_assert_eq!(new_deck.len() + hand_size as usize, deck.len());
+            prop_assert_eq!(hand.len(), hand_size);
+            prop_assert_eq!(new_deck.len() + hand_size, deck.len());
             let hand_set: HashSet<Card> = hand.into_iter().collect();
             prop_assert!(hand_set.is_subset(&deck));
         }
@@ -143,13 +143,17 @@ pub trait Communicator {
     fn wait_for_reconnect(&mut self, player: &str);
 }
 
-pub fn game<C>(communicator: &mut C, players: &mut VecDeque<Player>, num_rounds: u32) -> Vec<usize>
+pub fn game<C>(
+    communicator: &mut C,
+    players: &mut VecDeque<Player>,
+    num_rounds: usize,
+) -> Vec<usize>
 where
     C: Communicator,
 {
-    let mut down_sets: Vec<u32> = (1..=num_rounds).rev().collect();
-    let mut singles: Vec<u32> = (1..players.len() as u32).map(|_| 1).collect();
-    let mut up_sets: Vec<u32> = (2..=num_rounds).collect();
+    let mut down_sets: Vec<usize> = (1..=num_rounds).rev().collect();
+    let mut singles: Vec<usize> = (1..players.len()).map(|_| 1).collect();
+    let mut up_sets: Vec<usize> = (2..=num_rounds).collect();
     let mut sets = Vec::new();
     sets.append(&mut down_sets);
     sets.append(&mut singles);
@@ -175,9 +179,10 @@ where
             let hand;
             (deck, hand) = draw_hand(deck, set);
             communicator.write_to_all(Message::Turn { whose: player });
-            let guess = match player.human {
-                true => request_guess(communicator, player, &hand, &prev_guesses, players.len()),
-                false => make_guess(&hand, &prev_guesses, players.len()),
+            let guess = if player.human {
+                request_guess(communicator, player, &hand, &prev_guesses, players.len())
+            } else {
+                make_guess(&hand, &prev_guesses, players.len())
             };
             public_state.get_mut(&player.name).unwrap().guess = Some(guess);
             player.hand = hand;
@@ -201,7 +206,7 @@ where
                     (hand, trick) =
                         play_human_card(communicator, player, player.hand.clone(), trick);
                 } else {
-                    (hand, trick) = play_card(player.hand.clone(), trick)
+                    (hand, trick) = play_card(player.hand.clone(), trick);
                 }
                 player.hand = hand;
                 communicator.write_to_all(Message::Trick(&trick));
@@ -219,7 +224,7 @@ where
             let player = public_state.get_mut(&player.name).unwrap();
             *player = score_round(*player);
         }
-        players.rotate_left(1)
+        players.rotate_left(1);
     }
 
     determine_total_winners(players, &public_state)
@@ -231,11 +236,11 @@ fn create_deck() -> HashSet<Card> {
         .collect()
 }
 
-fn draw_hand(deck: HashSet<Card>, num: u32) -> (HashSet<Card>, Vec<Card>) {
+fn draw_hand(deck: HashSet<Card>, num: usize) -> (HashSet<Card>, Vec<Card>) {
     let hand = HashSet::from_iter(
         deck.iter()
             .copied()
-            .choose_multiple(&mut rand::thread_rng(), num.try_into().unwrap()),
+            .choose_multiple(&mut rand::thread_rng(), num),
     );
     (
         deck.difference(&hand).copied().collect(),
@@ -243,25 +248,25 @@ fn draw_hand(deck: HashSet<Card>, num: u32) -> (HashSet<Card>, Vec<Card>) {
     )
 }
 
-fn make_guess(hand: &Vec<Card>, guesses: &Vec<u32>, players: usize) -> u32 {
-    let mut guess: u32 = hand.iter().filter(|x| x.value >= 7).count() as u32;
+fn make_guess(hand: &Vec<Card>, guesses: &Vec<usize>, players: usize) -> usize {
+    let mut guess = hand.iter().filter(|x| x.value >= 7).count();
     if !validate_guess(hand.len(), guesses, players, guess) {
-        let new_guess = hand.iter().filter(|x| x.value >= 9).count() as u32;
+        let new_guess = hand.iter().filter(|x| x.value >= 9).count();
         if new_guess == guess {
             guess += 1;
         } else {
-            guess = new_guess
+            guess = new_guess;
         }
     }
     guess
 }
 
-fn validate_guess(hand_size: usize, guesses: &Vec<u32>, players: usize, guess: u32) -> bool {
-    if guess > hand_size as u32 {
+fn validate_guess(hand_size: usize, guesses: &Vec<usize>, players: usize, guess: usize) -> bool {
+    if guess > hand_size {
         return false;
     }
 
-    if guesses.len() == players - 1 && (guess + guesses.iter().sum::<u32>()) == hand_size as u32 {
+    if guesses.len() == players - 1 && (guess + guesses.iter().sum::<usize>()) == hand_size {
         return false;
     }
 
@@ -272,9 +277,9 @@ fn request_guess<C>(
     communicator: &mut C,
     player: &Player,
     hand: &Vec<Card>,
-    guesses: &Vec<u32>,
+    guesses: &Vec<usize>,
     players: usize,
-) -> u32
+) -> usize
 where
     C: Communicator,
 {
@@ -290,10 +295,7 @@ where
 
     loop {
         let text = communicator.read(player.name, Message::RequestGuess);
-        let guess: u32 = match text.trim().parse() {
-            Ok(guess) => guess,
-            Err(_) => continue,
-        };
+        let Ok(guess) = text.trim().parse() else { continue };
 
         if validate_guess(hand.len(), guesses, players, guess) {
             return guess;
@@ -301,7 +303,7 @@ where
     }
 }
 
-fn determine_start_player(guesses: &[u32]) -> usize {
+fn determine_start_player(guesses: &[usize]) -> usize {
     guesses
         .iter()
         .position(|x| x == guesses.iter().max().unwrap())
@@ -354,7 +356,7 @@ where
         hand.retain(|c| *c != card);
         cards.push(card);
 
-        return (hand, Trick(cards.to_vec()));
+        return (hand, Trick(cards.clone()));
     }
 }
 
@@ -370,16 +372,13 @@ fn play_card(mut hand: Vec<Card>, Trick(mut cards): Trick) -> (Vec<Card>, Trick)
 }
 
 pub fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
-    let first_card = match cards.first() {
-        Some(card) => card,
-        None => return None,
-    };
+    let Some(first_card) = cards.first() else { return None };
 
-    let indices = HashSet::from_iter(
-        hand.iter()
-            .enumerate()
-            .filter_map(|(index, card)| (card.suit == first_card.suit).then_some(index)),
-    );
+    let indices = hand
+        .iter()
+        .enumerate()
+        .filter_map(|(index, card)| (card.suit == first_card.suit).then_some(index))
+        .collect::<HashSet<_>>();
 
     (!indices.is_empty()).then_some(indices)
 }
@@ -396,7 +395,7 @@ fn determine_winner(Trick(cards): &Trick) -> usize {
 
 fn score_round(mut player: PublicState) -> PublicState {
     if let Some(guess) = player.guess.filter(|g| *g == player.wins) {
-        player.score += (10 * guess).max(10)
+        player.score += (10 * guess).max(10);
     }
 
     player.wins = 0;
@@ -407,7 +406,7 @@ pub type StatePerPlayer<'a> = HashMap<PlayerName<'a>, PublicState>;
 
 fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) -> Vec<usize> {
     let mut winners = Vec::new();
-    let mut highest_score = u32::MAX;
+    let mut highest_score = usize::MAX;
 
     for (index, player) in players.iter().enumerate() {
         let player = public.get(&player.name).unwrap();
@@ -418,7 +417,7 @@ fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) 
                 winners.push(index);
             }
             Ordering::Equal => winners.push(index),
-            _ => {}
+            Ordering::Less => {}
         };
     }
 

@@ -12,24 +12,25 @@ const CARD_SYMBOLS: [&str; 13] = [
     "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A",
 ];
 
-fn darken(text: String) -> String {
+fn darken(text: &str) -> String {
     format!("\x1b[90m{text}\x1b[0m")
 }
 
-fn format_card(card: &Card, darkened: bool, index: Option<usize>) -> String {
-    let suit_symbol = SUIT_SYMBOLS[card.suit as usize];
-    let card_symbol = CARD_SYMBOLS[card.value as usize];
+fn format_card(card: Card, darkened: bool, index: Option<usize>) -> String {
+    let suit_symbol = SUIT_SYMBOLS[card.suit];
+    let card_symbol = CARD_SYMBOLS[card.value];
 
     let index_string = match index {
-        None => "".into(),
+        None => String::new(),
         Some(index) => format!("{index}|"),
     };
 
     let text = format!("{index_string}{suit_symbol}{card_symbol}");
 
-    match darkened {
-        true => darken(text),
-        false => text,
+    if darkened {
+        darken(&text)
+    } else {
+        text
     }
 }
 
@@ -40,7 +41,7 @@ fn format_trick(Trick(cards): &Trick) -> Option<String> {
     (!cards.is_empty()).then(|| {
         cards
             .iter()
-            .map(|c| format_card(c, DARKENED, INDEX))
+            .map(|c| format_card(*c, DARKENED, INDEX))
             .join(" ")
     })
 }
@@ -55,16 +56,13 @@ fn format_hand(hand: &[Card], valid_cards: &Option<HashSet<usize>>, with_indices
             };
 
             let index = with_indices.then_some(index);
-            format_card(card, darkened, index)
+            format_card(*card, darkened, index)
         })
         .join(" ")
 }
 
 fn format_guess(state: &PublicState) -> String {
-    state
-        .guess
-        .map(|g| g.to_string())
-        .unwrap_or_else(|| "?".into())
+    state.guess.map_or_else(|| "?".into(), |g| g.to_string())
 }
 
 fn format_guesses(state: &StatePerPlayer) -> String {
@@ -84,9 +82,10 @@ fn format_scoreboard(public: &StatePerPlayer) -> String {
         let PublicState { guess, wins, score } = *public;
         let did_plump = guess.filter(|guess| wins == *guess).is_none();
 
-        let face = match did_plump {
-            false => SLIGHTLY_SMILING_FACE,
-            true => UPSIDE_DOWN_FACE,
+        let face = if did_plump {
+            UPSIDE_DOWN_FACE
+        } else {
+            SLIGHTLY_SMILING_FACE
         };
 
         let guess_text = format_guess(public);
@@ -122,14 +121,17 @@ fn format_winner(player: &Player) -> String {
 fn format_request_guess_context(
     player: &Player,
     hand: &[Card],
-    guesses: &[u32],
+    guesses: &[usize],
     players: usize,
 ) -> String {
     const VALID_CARDS: Option<HashSet<usize>> = None;
     const WITH_INDICES: bool = false;
 
     let hand_string = format_hand(hand, &VALID_CARDS, WITH_INDICES);
-    let guesses_string = guesses.iter().map(|i| i.to_string()).join(" ");
+    let guesses_string = guesses
+        .iter()
+        .map(std::string::ToString::to_string)
+        .join(" ");
 
     format!(
         "{}: Hand: {hand_string}, Previous Guesses: {guesses_string}, Players: {players}",
