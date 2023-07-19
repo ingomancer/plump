@@ -1,18 +1,8 @@
 use crate::message::Message;
 use std::{
-    io::{stdin, stdout, Error as IoError, ErrorKind, Read, Result as IoResult, Write},
+    io::{Error as IoError, ErrorKind, Read, Result as IoResult, Write},
     net::TcpStream,
 };
-
-pub fn input(prompt: &str) -> IoResult<String> {
-    print!("{prompt}");
-    stdout().flush()?;
-
-    let mut result = String::new();
-    stdin().read_line(&mut result)?;
-
-    Ok(result)
-}
 
 fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
@@ -53,7 +43,6 @@ fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
 }
 
 pub(crate) enum Client {
-    Local,
     RemoteText(TcpStream),
     RemoteJson(TcpStream),
 }
@@ -67,16 +56,11 @@ impl Client {
                 let line = format!("{},{}", line.len(), line);
                 send_to_remote(socket, line)
             }
-            Client::Local => {
-                print!("{}", msg.to_string() + "\n");
-                Ok(())
-            }
         }
     }
 
     pub(crate) fn readline(&mut self) -> IoResult<String> {
         let text = match self {
-            Client::Local => input(""),
             Client::RemoteText(socket) | Client::RemoteJson(socket) => readline_from_remote(socket),
         }?;
 
@@ -95,7 +79,6 @@ impl Client {
     pub(crate) fn into_remote_json(self) -> Option<Client> {
         match self {
             Client::RemoteText(socket) => Some(Client::RemoteJson(socket)),
-            Client::Local => None,
             Client::RemoteJson(_) => Some(self),
         }
     }

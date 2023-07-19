@@ -5,7 +5,7 @@ use crate::game::{Card, Player, StatePerPlayer, Trick};
 #[derive(Serialize, Copy, Clone)]
 pub enum Message<'a> {
     RequestGuessContext {
-        player: &'a Player<'a>,
+        player: &'a Player,
         hand: &'a [Card],
         guesses: &'a [usize],
         players: usize,
@@ -16,11 +16,11 @@ pub enum Message<'a> {
     },
 
     Turn {
-        whose: &'a Player<'a>,
+        whose: &'a Player,
     },
 
     PlayRequestContext {
-        player: &'a Player<'a>,
+        player: &'a Player,
         hand: &'a [Card],
         trick: &'a Trick,
     },
@@ -31,13 +31,13 @@ pub enum Message<'a> {
         state: &'a StatePerPlayer<'a>,
     },
 
-    Winner(&'a Player<'a>),
+    Winner(&'a Player),
 
     Winners {
-        players: &'a [Player<'a>],
+        players: &'a [Player],
         winner_indices: &'a [usize],
     },
     RequestPlayerName,
-    PlayRequest(&'a Player<'a>),
+    PlayRequest(&'a Player),
     RequestGuess,
 }

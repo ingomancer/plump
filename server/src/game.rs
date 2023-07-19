@@ -12,18 +12,18 @@ use serde::Serialize;
 
 use crate::message::Message;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Debug)]
-pub struct PlayerName<'a>(&'a str);
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Debug)]
+pub struct PlayerName(String);
 
-impl<'a> PlayerName<'a> {
+impl PlayerName {
     pub fn as_str(&self) -> &str {
-        self.0
+        self.0.as_str()
     }
 }
 
 #[derive(Clone, Serialize)]
-pub struct Player<'a> {
-    pub name: PlayerName<'a>,
+pub struct Player {
+    pub name: PlayerName,
     pub human: bool,
     pub hand: Vec<Card>,
 }
@@ -51,12 +51,12 @@ pub struct PublicState {
     pub score: usize,
 }
 
-pub fn create_players(player_names: &Vec<(String, bool)>) -> VecDeque<Player> {
+pub fn create_players(player_names: Vec<(String, bool)>) -> VecDeque<Player> {
     let mut players = VecDeque::new();
     for (name, human) in player_names {
         players.push_back(Player {
             name: PlayerName(name),
-            human: *human,
+            human,
             hand: Vec::new(),
         });
     }
@@ -137,17 +137,13 @@ mod test {
 }
 
 pub trait Communicator {
-    fn read(&mut self, player: PlayerName, prompt: Message) -> String;
+    fn read(&mut self, player: &PlayerName, prompt: Message) -> String;
     fn write_to_all(&mut self, text: Message);
-    fn write_to_one(&mut self, player: PlayerName, text: Message);
+    fn write_to_one(&mut self, player: &PlayerName, text: Message);
     fn wait_for_reconnect(&mut self, player: &str);
 }
 
-pub fn game<C>(
-    communicator: &mut C,
-    players: &mut VecDeque<Player>,
-    num_rounds: usize,
-) -> Vec<usize>
+pub async fn game<C>(communicator: &mut C, mut players: VecDeque<Player>, num_rounds: usize)
 where
     C: Communicator,
 {
@@ -226,8 +222,13 @@ where
         }
         players.rotate_left(1);
     }
+    let winners = determine_total_winners(&players, &public_state);
 
-    determine_total_winners(players, &public_state)
+    let players_vec: Vec<Player> = players.into_iter().collect_vec();
+    communicator.write_to_all(Message::Winners {
+        players: &players_vec,
+        winner_indices: &winners,
+    });
 }
 
 fn create_deck() -> HashSet<Card> {
@@ -284,7 +285,7 @@ where
     C: Communicator,
 {
     communicator.write_to_one(
-        player.name,
+        &player.name,
         Message::RequestGuessContext {
             player,
             hand,
@@ -294,7 +295,7 @@ where
     );
 
     loop {
-        let text = communicator.read(player.name, Message::RequestGuess);
+        let text = communicator.read(&player.name, Message::RequestGuess);
         let Ok(guess) = text.trim().parse() else { continue };
 
         if validate_guess(hand.len(), guesses, players, guess) {
@@ -324,7 +325,7 @@ where
     communicator.write_to_all(Message::Turn { whose: player });
 
     communicator.write_to_one(
-        player.name,
+        &player.name,
         Message::PlayRequestContext {
             player,
             hand: &hand,
@@ -335,7 +336,7 @@ where
     let Trick(mut cards) = trick;
 
     loop {
-        let text = communicator.read(player.name, Message::PlayRequest(player));
+        let text = communicator.read(&player.name, Message::PlayRequest(player));
 
         let index: usize = match text.trim().parse() {
             Ok(value) => value,
@@ -402,7 +403,7 @@ fn score_round(mut player: PublicState) -> PublicState {
     player
 }
 
-pub type StatePerPlayer<'a> = HashMap<PlayerName<'a>, PublicState>;
+pub type StatePerPlayer<'a> = HashMap<PlayerName, PublicState>;
 
 fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) -> Vec<usize> {
     let mut winners = Vec::new();
