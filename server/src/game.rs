@@ -78,10 +78,10 @@ mod test {
     proptest! {
         #[test]
         fn test_create_players(names in any::<Vec<(String, bool)>>()) {
-            let players = create_players(&names);
+            let players = create_players(names.clone());
             prop_assert!(players.len() == names.len());
             for ((name, human), player) in names.iter().zip(players.iter()) {
-                prop_assert_eq!(PlayerName(name), player.name);
+                prop_assert_eq!(PlayerName(name.to_string()), player.name.clone());
                 prop_assert_eq!(human, &player.human);
             }
         }
