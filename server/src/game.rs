@@ -296,7 +296,9 @@ where
 
     loop {
         let text = communicator.read(&player.name, Message::RequestGuess);
-        let Ok(guess) = text.trim().parse() else { continue };
+        let Ok(guess) = text.trim().parse() else {
+            continue;
+        };
 
         if validate_guess(hand.len(), guesses, players, guess) {
             return guess;
@@ -373,7 +375,7 @@ fn play_card(mut hand: Vec<Card>, Trick(mut cards): Trick) -> (Vec<Card>, Trick)
 }
 
 pub fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
-    let Some(first_card) = cards.first() else { return None };
+    let first_card = cards.first()?;
 
     let indices = hand
         .iter()
