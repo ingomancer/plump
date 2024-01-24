@@ -64,7 +64,9 @@ where
         for player in &mut players_in_set {
             let hand;
             (deck, hand) = draw_hand(deck, set);
-            communicator.write_to_all(Message::Turn { whose: player });
+            communicator.write_to_all(Message::Turn {
+                whose: player.clone(),
+            });
             let guess = if player.human {
                 request_guess(communicator, player, &hand, &prev_guesses, players.len())
             } else {
@@ -75,7 +77,7 @@ where
             prev_guesses.push(guess);
         }
         communicator.write_to_all(Message::Guesses {
-            state: &public_state,
+            state: public_state.clone(),
         });
         let index = determine_start_player(&prev_guesses);
         players_in_set.rotate_left(index);
@@ -95,15 +97,15 @@ where
                     (hand, trick) = play_card(player.hand.clone(), trick);
                 }
                 player.hand = hand;
-                communicator.write_to_all(Message::Trick(&trick));
+                communicator.write_to_all(Message::Trick(trick.clone()));
             }
             let index = determine_winner(&trick);
             let winner = &players_in_set[index];
             public_state.get_mut(&winner.name).unwrap().wins += 1;
             communicator.write_to_all(Message::Scoreboard {
-                state: &public_state,
+                state: public_state.clone(),
             });
-            communicator.write_to_all(Message::Winner(winner));
+            communicator.write_to_all(Message::Winner(winner.clone()));
             players_in_set.rotate_left(index);
         }
         for player in &players_in_set {
@@ -116,8 +118,8 @@ where
 
     let players_vec: Vec<Player> = players.into_iter().collect_vec();
     communicator.write_to_all(Message::Winners {
-        players: &players_vec,
-        winner_indices: &winners,
+        players: players_vec,
+        winner_indices: winners,
     });
 }
 
@@ -159,9 +161,9 @@ where
     communicator.write_to_one(
         &player.name,
         Message::RequestGuessContext {
-            player,
-            hand,
-            guesses,
+            player: player.clone(),
+            hand: hand.clone(),
+            guesses: guesses.clone(),
             players,
         },
     );
@@ -196,22 +198,24 @@ where
 {
     let valid_cards = playable_card_indices(&hand, &trick);
 
-    communicator.write_to_all(Message::Turn { whose: player });
+    communicator.write_to_all(Message::Turn {
+        whose: player.clone(),
+    });
 
     communicator.write_to_one(
         &player.name,
         Message::PlayRequestContext {
-            player,
-            hand: &hand,
-            trick: &trick,
-            valid_cards: &valid_cards,
+            player: player.clone(),
+            hand: hand.clone(),
+            trick: trick.clone(),
+            valid_cards: valid_cards.clone(),
         },
     );
 
     let Trick(mut cards) = trick;
 
     loop {
-        let text = communicator.read(&player.name, Message::PlayRequest(player));
+        let text = communicator.read(&player.name, Message::PlayRequest(player.clone()));
 
         let index: usize = match text.trim().parse() {
             Ok(value) => value,
@@ -268,7 +272,7 @@ fn score_round(mut player: PublicState) -> PublicState {
 
 fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) -> Vec<usize> {
     let mut winners = Vec::new();
-    let mut highest_score = usize::MAX;
+    let mut highest_score = usize::MIN;
 
     for (index, player) in players.iter().enumerate() {
         let player = public.get(&player.name).unwrap();
@@ -276,6 +280,7 @@ fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) 
         match player.score.cmp(&highest_score) {
             Ordering::Greater => {
                 highest_score = player.score;
+                winners.clear();
                 winners.push(index);
             }
             Ordering::Equal => winners.push(index),

@@ -168,7 +168,7 @@ fn format_request_player_name() -> String {
     "Please input player name: ".to_owned()
 }
 
-impl<'a> ToString for Message<'a> {
+impl ToString for Message {
     fn to_string(&self) -> String {
         match self {
             Message::RequestGuessContext {

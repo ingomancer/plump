@@ -54,7 +54,7 @@ impl Client {
             Client::RemoteText(socket) => send_to_remote(socket, msg.to_string() + "\n"),
             Client::RemoteJson(socket) => {
                 let line = serde_json::to_string(&msg).unwrap();
-                let line = format!("{},{}", line.len(), line);
+                let line = format!("{}\n", line);
                 send_to_remote(socket, line)
             }
         }

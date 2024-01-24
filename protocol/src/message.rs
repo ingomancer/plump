@@ -1,47 +1,47 @@
 use std::collections::HashSet;
 
 use playing_cards::structs::Card;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::structs::{Player, StatePerPlayer, Trick};
 
-#[derive(Serialize, Copy, Clone)]
-pub enum Message<'a> {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Message {
     RequestGuessContext {
-        player: &'a Player,
-        hand: &'a [Card],
-        guesses: &'a [usize],
+        player: Player,
+        hand: Vec<Card>,
+        guesses: Vec<usize>,
         players: usize,
     },
 
     Guesses {
-        state: &'a StatePerPlayer<'a>,
+        state: StatePerPlayer,
     },
 
     Turn {
-        whose: &'a Player,
+        whose: Player,
     },
 
     PlayRequestContext {
-        player: &'a Player,
-        hand: &'a [Card],
-        trick: &'a Trick,
-        valid_cards: &'a Option<HashSet<usize>>,
+        player: Player,
+        hand: Vec<Card>,
+        trick: Trick,
+        valid_cards: Option<HashSet<usize>>,
     },
 
-    Trick(&'a Trick),
+    Trick(Trick),
 
     Scoreboard {
-        state: &'a StatePerPlayer<'a>,
+        state: StatePerPlayer,
     },
 
-    Winner(&'a Player),
+    Winner(Player),
 
     Winners {
-        players: &'a [Player],
-        winner_indices: &'a [usize],
+        players: Vec<Player>,
+        winner_indices: Vec<usize>,
     },
     RequestPlayerName,
-    PlayRequest(&'a Player),
+    PlayRequest(Player),
     RequestGuess,
 }

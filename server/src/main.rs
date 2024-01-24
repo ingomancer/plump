@@ -1,6 +1,8 @@
 mod game;
 mod network;
 
+use futures::future::join_all;
+
 use std::{
     collections::HashMap,
     io::Result as IoResult,
@@ -53,7 +55,7 @@ impl Communicator for CommunicatorImpl {
         loop {
             {
                 let client = self.sockets.get_mut(name.as_str()).unwrap();
-                if let Ok(res) = client.readline_with_prompt(prompt) {
+                if let Ok(res) = client.readline_with_prompt(prompt.clone()) {
                     break res;
                 }
             }
@@ -66,7 +68,7 @@ impl Communicator for CommunicatorImpl {
             loop {
                 {
                     let client = self.sockets.get_mut(name.as_str()).unwrap();
-                    if client.send(message).is_ok() {
+                    if client.send(message.clone()).is_ok() {
                         break;
                     }
                 }
@@ -79,7 +81,7 @@ impl Communicator for CommunicatorImpl {
         loop {
             {
                 let client = self.sockets.get_mut(name.as_str()).unwrap();
-                if client.send(message).is_ok() {
+                if client.send(message.clone()).is_ok() {
                     break;
                 }
             }
@@ -123,6 +125,8 @@ struct Args {
     players: usize,
     #[arg(long, default_value = "9999")]
     port: u16,
+    #[arg(long, default_value = "false")]
+    ai: bool,
 }
 
 #[tokio::main]
@@ -148,7 +152,13 @@ async fn main() -> IoResult<()> {
 
     for _ in 0..(num_players) {
         let mut remote_client = match listener.incoming().next().unwrap() {
-            Ok(stream) => network::Client::RemoteText(stream),
+            Ok(stream) => {
+                if args.ai {
+                    network::Client::RemoteJson(stream)
+                } else {
+                    network::Client::RemoteText(stream)
+                }
+            }
             Err(_) => continue,
         };
 
@@ -173,8 +183,7 @@ async fn main() -> IoResult<()> {
     let running_game =
         tokio::spawn(async move { game(&mut communicator, players, num_rounds).await });
     let reconnect_handler = tokio::spawn(async move {
-        loop {
-            let request = reconnect_receiver.recv().unwrap();
+        while let Ok(request) = reconnect_receiver.recv() {
             println!("Reconnecting player {}.", request.player);
             let remote_client = match listener.incoming().next().unwrap() {
                 Ok(stream) => stream,
@@ -183,7 +192,6 @@ async fn main() -> IoResult<()> {
             request.return_channel.send(remote_client).unwrap();
         }
     });
-    running_game.await?;
-    reconnect_handler.await?;
+    join_all([running_game, reconnect_handler]).await;
     Ok(())
 }

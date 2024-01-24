@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use playing_cards::structs::Card;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
 pub struct PlayerName(pub String);
 
 impl PlayerName {
@@ -12,14 +12,14 @@ impl PlayerName {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Player {
     pub name: PlayerName,
     pub human: bool,
     pub hand: Vec<Card>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Trick(pub Vec<Card>);
 
 impl Trick {
@@ -33,11 +33,11 @@ impl Default for Trick {
         Self::new()
     }
 }
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub struct PublicState {
     pub guess: Option<usize>,
     pub wins: usize,
     pub score: usize,
 }
 
-pub type StatePerPlayer<'a> = HashMap<PlayerName, PublicState>;
+pub type StatePerPlayer = HashMap<PlayerName, PublicState>;

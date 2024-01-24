@@ -5,13 +5,15 @@ use rand::seq::IteratorRandom;
 
 use crate::structs::Card;
 
-pub fn create_deck() -> HashSet<Card> {
+pub type Deck = HashSet<Card>;
+
+pub fn create_deck() -> Deck {
     iproduct!(0..4, 0..13)
         .map(|(x, y)| Card { suit: x, value: y })
         .collect()
 }
 
-pub fn draw_hand(deck: HashSet<Card>, num: usize) -> (HashSet<Card>, Vec<Card>) {
+pub fn draw_hand(deck: Deck, num: usize) -> (Deck, Vec<Card>) {
     let hand = HashSet::from_iter(
         deck.iter()
             .copied()
@@ -27,8 +29,8 @@ mod test {
     use super::*;
     use proptest::prelude::*;
 
-    fn deck_and_hand_size() -> impl Strategy<Value = (HashSet<Card>, usize)> {
-        any::<HashSet<Card>>().prop_flat_map(|deck| {
+    fn deck_and_hand_size() -> impl Strategy<Value = (Deck, usize)> {
+        any::<Deck>().prop_flat_map(|deck| {
             let len = deck.len();
             (Just(deck), 0..=len)
         })
@@ -41,7 +43,7 @@ mod test {
             prop_assert!(new_deck.is_subset(&deck));
             prop_assert_eq!(hand.len(), hand_size);
             prop_assert_eq!(new_deck.len() + hand_size, deck.len());
-            let hand_set: HashSet<Card> = hand.into_iter().collect();
+            let hand_set: Deck = hand.into_iter().collect();
             prop_assert!(hand_set.is_subset(&deck));
         }
     }
