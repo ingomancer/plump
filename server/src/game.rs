@@ -1,55 +1,18 @@
+use itertools::Itertools;
+use playing_cards::{
+    helpers::{create_deck, draw_hand},
+    structs::Card,
+};
+use rand::seq::IteratorRandom;
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
 };
 
-use itertools::{iproduct, Itertools};
-
-#[cfg(test)]
-use proptest_derive::Arbitrary;
-use rand::seq::IteratorRandom;
-use serde::Serialize;
-
-use crate::message::Message;
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Debug)]
-pub struct PlayerName(String);
-
-impl PlayerName {
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-#[derive(Clone, Serialize)]
-pub struct Player {
-    pub name: PlayerName,
-    pub human: bool,
-    pub hand: Vec<Card>,
-}
-
-#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Debug, Serialize)]
-#[cfg_attr(test, derive(Arbitrary))]
-pub struct Card {
-    pub suit: usize,
-    pub value: usize,
-}
-
-#[derive(Clone, Serialize)]
-pub struct Trick(pub Vec<Card>);
-
-impl Trick {
-    fn new() -> Self {
-        Self(Vec::new())
-    }
-}
-
-#[derive(Clone, Copy, Serialize)]
-pub struct PublicState {
-    pub guess: Option<usize>,
-    pub wins: usize,
-    pub score: usize,
-}
+use protocol::{
+    message::Message,
+    structs::{Player, PlayerName, PublicState, StatePerPlayer, Trick},
+};
 
 pub fn create_players(player_names: Vec<(String, bool)>) -> VecDeque<Player> {
     let mut players = VecDeque::new();
@@ -61,79 +24,6 @@ pub fn create_players(player_names: Vec<(String, bool)>) -> VecDeque<Player> {
         });
     }
     players
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use proptest::prelude::*;
-
-    fn deck_and_hand_size() -> impl Strategy<Value = (HashSet<Card>, usize)> {
-        any::<HashSet<Card>>().prop_flat_map(|deck| {
-            let len = deck.len();
-            (Just(deck), 0..=len)
-        })
-    }
-
-    proptest! {
-        #[test]
-        fn test_create_players(names in any::<Vec<(String, bool)>>()) {
-            let players = create_players(names.clone());
-            prop_assert!(players.len() == names.len());
-            for ((name, human), player) in names.iter().zip(players.iter()) {
-                prop_assert_eq!(PlayerName(name.to_string()), player.name.clone());
-                prop_assert_eq!(human, &player.human);
-            }
-        }
-
-        #[test]
-        fn test_draw_hand((deck, hand_size) in deck_and_hand_size()) {
-            let (new_deck, hand) = draw_hand(deck.clone(), hand_size);
-            prop_assert!(new_deck.is_subset(&deck));
-            prop_assert_eq!(hand.len(), hand_size);
-            prop_assert_eq!(new_deck.len() + hand_size, deck.len());
-            let hand_set: HashSet<Card> = hand.into_iter().collect();
-            prop_assert!(hand_set.is_subset(&deck));
-        }
-    }
-
-    #[test]
-    fn test_create_deck() {
-        let deck = create_deck();
-        assert_eq!(deck.len(), 52);
-    }
-
-    #[test]
-    fn test_determine_winner() {
-        let trick = Trick(vec![
-            Card { suit: 0, value: 1 },
-            Card { suit: 1, value: 10 },
-            Card { suit: 0, value: 7 },
-        ]);
-        let winner = determine_winner(&trick);
-        assert_eq!(winner, 2);
-        let trick = Trick(vec![
-            Card { suit: 1, value: 1 },
-            Card { suit: 1, value: 10 },
-            Card { suit: 0, value: 7 },
-        ]);
-        let winner = determine_winner(&trick);
-        assert_eq!(winner, 1);
-        let trick = Trick(vec![
-            Card { suit: 3, value: 1 },
-            Card { suit: 1, value: 10 },
-            Card { suit: 0, value: 7 },
-        ]);
-        let winner = determine_winner(&trick);
-        assert_eq!(winner, 0);
-        let trick = Trick(vec![
-            Card { suit: 0, value: 1 },
-            Card { suit: 0, value: 10 },
-            Card { suit: 0, value: 11 },
-        ]);
-        let winner = determine_winner(&trick);
-        assert_eq!(winner, 2);
-    }
 }
 
 pub trait Communicator {
@@ -231,24 +121,6 @@ where
     });
 }
 
-fn create_deck() -> HashSet<Card> {
-    iproduct!(0..4, 0..13)
-        .map(|(x, y)| Card { suit: x, value: y })
-        .collect()
-}
-
-fn draw_hand(deck: HashSet<Card>, num: usize) -> (HashSet<Card>, Vec<Card>) {
-    let hand = HashSet::from_iter(
-        deck.iter()
-            .copied()
-            .choose_multiple(&mut rand::thread_rng(), num),
-    );
-    (
-        deck.difference(&hand).copied().collect(),
-        hand.into_iter().sorted().collect(),
-    )
-}
-
 fn make_guess(hand: &Vec<Card>, guesses: &Vec<usize>, players: usize) -> usize {
     let mut guess = hand.iter().filter(|x| x.value >= 7).count();
     if !validate_guess(hand.len(), guesses, players, guess) {
@@ -332,6 +204,7 @@ where
             player,
             hand: &hand,
             trick: &trick,
+            valid_cards: &valid_cards,
         },
     );
 
@@ -374,18 +247,6 @@ fn play_card(mut hand: Vec<Card>, Trick(mut cards): Trick) -> (Vec<Card>, Trick)
     (hand, Trick(cards))
 }
 
-pub fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
-    let first_card = cards.first()?;
-
-    let indices = hand
-        .iter()
-        .enumerate()
-        .filter_map(|(index, card)| (card.suit == first_card.suit).then_some(index))
-        .collect::<HashSet<_>>();
-
-    (!indices.is_empty()).then_some(indices)
-}
-
 fn determine_winner(Trick(cards): &Trick) -> usize {
     let first_card = cards.first().unwrap();
     let first_suit = first_card.suit;
@@ -405,8 +266,6 @@ fn score_round(mut player: PublicState) -> PublicState {
     player
 }
 
-pub type StatePerPlayer<'a> = HashMap<PlayerName, PublicState>;
-
 fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) -> Vec<usize> {
     let mut winners = Vec::new();
     let mut highest_score = usize::MAX;
@@ -425,4 +284,67 @@ fn determine_total_winners(players: &VecDeque<Player>, public: &StatePerPlayer) 
     }
 
     winners
+}
+
+fn playable_card_indices(hand: &[Card], Trick(cards): &Trick) -> Option<HashSet<usize>> {
+    let first_card = cards.first()?;
+
+    let indices = hand
+        .iter()
+        .enumerate()
+        .filter_map(|(index, card)| (card.suit == first_card.suit).then_some(index))
+        .collect::<HashSet<_>>();
+
+    (!indices.is_empty()).then_some(indices)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use proptest::prelude::*;
+    use protocol::structs::Trick;
+
+    proptest! {
+        #[test]
+        fn test_create_players(names in any::<Vec<(String, bool)>>()) {
+            let players = create_players(names.clone());
+            prop_assert!(players.len() == names.len());
+            for ((name, human), player) in names.iter().zip(players.iter()) {
+                prop_assert_eq!(PlayerName(name.to_string()), player.name.clone());
+                prop_assert_eq!(human, &player.human);
+            }
+        }
+    }
+
+    #[test]
+    fn test_determine_winner() {
+        let trick = Trick(vec![
+            Card { suit: 0, value: 1 },
+            Card { suit: 1, value: 10 },
+            Card { suit: 0, value: 7 },
+        ]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 2);
+        let trick = Trick(vec![
+            Card { suit: 1, value: 1 },
+            Card { suit: 1, value: 10 },
+            Card { suit: 0, value: 7 },
+        ]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 1);
+        let trick = Trick(vec![
+            Card { suit: 3, value: 1 },
+            Card { suit: 1, value: 10 },
+            Card { suit: 0, value: 7 },
+        ]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 0);
+        let trick = Trick(vec![
+            Card { suit: 0, value: 1 },
+            Card { suit: 0, value: 10 },
+            Card { suit: 0, value: 11 },
+        ]);
+        let winner = determine_winner(&trick);
+        assert_eq!(winner, 2);
+    }
 }

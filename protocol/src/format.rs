@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use itertools::Itertools;
-
 use crate::{
-    game::{playable_card_indices, Card, Player, PublicState, StatePerPlayer, Trick},
     message::Message,
+    structs::{Player, PublicState, StatePerPlayer, Trick},
 };
+use itertools::Itertools;
+use playing_cards::structs::Card;
 
 const SUIT_SYMBOLS: [&str; 4] = ["♥", "♣", "♦", "♠"];
 const CARD_SYMBOLS: [&str; 13] = [
@@ -20,10 +20,7 @@ fn format_card(card: Card, darkened: bool, index: Option<usize>) -> String {
     let suit_symbol = SUIT_SYMBOLS[card.suit];
     let card_symbol = CARD_SYMBOLS[card.value];
 
-    let index_string = match index {
-        None => String::new(),
-        Some(index) => format!("{index}|"),
-    };
+    let index_string = index.map_or_else(String::new, |index| format!("{index}|"));
 
     let text = format!("{index_string}{suit_symbol}{card_symbol}");
 
@@ -50,10 +47,9 @@ fn format_hand(hand: &[Card], valid_cards: &Option<HashSet<usize>>, with_indices
     hand.iter()
         .enumerate()
         .map(|(index, card)| {
-            let darkened = match &valid_cards {
-                Some(cards) => !cards.contains(&index),
-                None => false,
-            };
+            let darkened = valid_cards
+                .as_ref()
+                .map_or(false, |cards| !cards.contains(&index));
 
             let index = with_indices.then_some(index);
             format_card(*card, darkened, index)
@@ -104,10 +100,10 @@ fn format_scoreboard(public: &StatePerPlayer) -> String {
 
 fn format_player_prompt(trick: &Trick) -> String {
     let trick_string = format_trick(trick);
-    match trick_string {
-        Some(text) => "Trick: ".to_owned() + &text,
-        None => "You go first!".to_owned(),
-    }
+    trick_string.map_or_else(
+        || "You go first!".to_owned(),
+        |text| "Trick: ".to_owned() + &text,
+    )
 }
 
 fn format_turn(player: &Player) -> String {
@@ -143,10 +139,14 @@ fn format_request_guess() -> String {
     "Please make a guess: ".to_owned()
 }
 
-fn format_play_request_context(player: &Player, hand: &[Card], trick: &Trick) -> String {
+fn format_play_request_context(
+    player: &Player,
+    hand: &[Card],
+    trick: &Trick,
+    valid_cards: &Option<HashSet<usize>>,
+) -> String {
     const WITH_INDICES: bool = true;
-    let valid_cards = playable_card_indices(hand, trick);
-    let hand_string = format_hand(hand, &valid_cards, WITH_INDICES);
+    let hand_string = format_hand(hand, valid_cards, WITH_INDICES);
 
     let state = format_player_prompt(trick);
     format!("{}: Hand: {hand_string}, {state}", player.name.as_str())
@@ -186,7 +186,8 @@ impl<'a> ToString for Message<'a> {
                 player,
                 hand,
                 trick,
-            } => format_play_request_context(player, hand, trick),
+                valid_cards,
+            } => format_play_request_context(player, hand, trick, valid_cards),
 
             Message::Trick(trick) => format_trick(trick).unwrap_or_default(),
 

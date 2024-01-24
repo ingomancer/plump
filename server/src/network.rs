@@ -1,8 +1,9 @@
-use crate::message::Message;
 use std::{
     io::{Error as IoError, ErrorKind, Read, Result as IoResult, Write},
     net::TcpStream,
 };
+
+use protocol::message::Message;
 
 fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
@@ -24,7 +25,7 @@ fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
     const NEWLINE: u8 = 0xA;
     let mut all = Vec::<u8>::new();
     loop {
-        let mut buffer = [0u8; 1024];
+        let mut buffer = [0_u8; 1024];
         let received = socket.read(&mut buffer)?;
         if received == 0 {
             return Err(IoError::new(

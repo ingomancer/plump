@@ -3,22 +3,27 @@ name = "server"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 clap = { version = "4.3.10", features = [
     "derive",
     "std",
 ], default-features = false }
-itertools = "0.10.5"
-rand = { features = ["std_rng"], default-features = false, version = "0.8.5" }
-serde = { version = "1.0.160", features = [
-    "serde_derive",
+itertools = { default-features = false, version = "0.10.5" }
+rand = { default-features = false, version = "0.8.5" }
+protocol = { path = "../protocol" }
+tokio = { version = "1.29.1", features = [
+    "rt-multi-thread",
+    "macros",
 ], default-features = false }
 serde_json = "1.0.96"
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
+playing_cards = { path = "../playing_cards" }
 
 [dev-dependencies]
 proptest = "1.1.0"
-proptest-derive = "0.3.0"
+
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.44.0", features = [

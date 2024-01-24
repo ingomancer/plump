@@ -1,6 +1,4 @@
-mod format;
 mod game;
-mod message;
 mod network;
 
 use std::{
@@ -12,12 +10,8 @@ use std::{
 };
 
 use clap::Parser;
-use game::PlayerName;
-
-use crate::{
-    game::{create_players, game, Communicator},
-    message::Message,
-};
+use game::{create_players, game, Communicator};
+use protocol::{message::Message, structs::PlayerName};
 
 #[cfg(windows)]
 fn enable_colors() {

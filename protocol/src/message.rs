@@ -1,6 +1,9 @@
+use std::collections::HashSet;
+
+use playing_cards::structs::Card;
 use serde::Serialize;
 
-use crate::game::{Card, Player, StatePerPlayer, Trick};
+use crate::structs::{Player, StatePerPlayer, Trick};
 
 #[derive(Serialize, Copy, Clone)]
 pub enum Message<'a> {
@@ -23,6 +26,7 @@ pub enum Message<'a> {
         player: &'a Player,
         hand: &'a [Card],
         trick: &'a Trick,
+        valid_cards: &'a Option<HashSet<usize>>,
     },
 
     Trick(&'a Trick),
