@@ -33,94 +33,104 @@ pub trait Communicator {
     fn wait_for_reconnect(&mut self, player: &str);
 }
 
-pub async fn game<C>(communicator: &mut C, mut players: VecDeque<Player>, num_rounds: usize)
+pub async fn game<C>(communicator: &mut C, players: VecDeque<Player>, num_rounds: usize, ai: bool)
 where
     C: Communicator,
 {
-    let mut down_sets: Vec<usize> = (1..=num_rounds).rev().collect();
-    let mut singles: Vec<usize> = (1..players.len()).map(|_| 1).collect();
-    let mut up_sets: Vec<usize> = (2..=num_rounds).collect();
-    let mut sets = Vec::new();
-    sets.append(&mut down_sets);
-    sets.append(&mut singles);
-    sets.append(&mut up_sets);
+    let mut games = 0;
+    let game_count = if ai { 1000 } else { u32::MAX };
+    loop {
+        let mut players = players.clone();
+        let mut down_sets: Vec<usize> = (1..=num_rounds).rev().collect();
+        let mut singles: Vec<usize> = (1..players.len()).map(|_| 1).collect();
+        let mut up_sets: Vec<usize> = (2..=num_rounds).collect();
+        let mut sets = Vec::new();
+        sets.append(&mut down_sets);
+        sets.append(&mut singles);
+        sets.append(&mut up_sets);
 
-    let mut public_state = HashMap::new();
-    for player in players.clone() {
-        public_state.insert(
-            player.name,
-            PublicState {
-                guess: None,
-                wins: 0,
-                score: 0,
-            },
-        );
-    }
-
-    for set in sets {
-        let mut players_in_set = players.clone();
-        let mut deck = create_deck();
-        let mut prev_guesses = vec![];
-        for player in &mut players_in_set {
-            let hand;
-            (deck, hand) = draw_hand(deck, set);
-            communicator.write_to_all(Message::Turn {
-                whose: player.clone(),
-            });
-            let guess = if player.human {
-                request_guess(communicator, player, &hand, &prev_guesses, players.len())
-            } else {
-                make_guess(&hand, &prev_guesses, players.len())
-            };
-            public_state.get_mut(&player.name).unwrap().guess = Some(guess);
-            player.hand = hand;
-            prev_guesses.push(guess);
+        let mut public_state = HashMap::new();
+        for player in players.clone() {
+            public_state.insert(
+                player.name,
+                PublicState {
+                    guess: None,
+                    wins: 0,
+                    score: 0,
+                },
+            );
         }
-        communicator.write_to_all(Message::Guesses {
-            state: public_state.clone(),
-        });
-        let index = determine_start_player(&prev_guesses);
-        players_in_set.rotate_left(index);
 
-        while players_in_set
-            .front()
-            .filter(|p| !p.hand.is_empty())
-            .is_some()
-        {
-            let mut trick = Trick::new();
+        for set in sets {
+            let mut players_in_set = players.clone();
+            let mut deck = create_deck();
+            let mut prev_guesses = vec![];
             for player in &mut players_in_set {
                 let hand;
-                if player.human {
-                    (hand, trick) =
-                        play_human_card(communicator, player, player.hand.clone(), trick);
+                (deck, hand) = draw_hand(deck, set);
+                communicator.write_to_all(Message::Turn {
+                    whose: player.clone(),
+                });
+                let guess = if player.human {
+                    request_guess(communicator, player, &hand, &prev_guesses, players.len())
                 } else {
-                    (hand, trick) = play_card(player.hand.clone(), trick);
-                }
+                    make_guess(&hand, &prev_guesses, players.len())
+                };
+                public_state.get_mut(&player.name).unwrap().guess = Some(guess);
                 player.hand = hand;
-                communicator.write_to_all(Message::Trick(trick.clone()));
+                prev_guesses.push(guess);
             }
-            let index = determine_winner(&trick);
-            let winner = &players_in_set[index];
-            public_state.get_mut(&winner.name).unwrap().wins += 1;
-            communicator.write_to_all(Message::Scoreboard {
+            communicator.write_to_all(Message::Guesses {
                 state: public_state.clone(),
             });
-            communicator.write_to_all(Message::Winner(winner.clone()));
+            let index = determine_start_player(&prev_guesses);
             players_in_set.rotate_left(index);
-        }
-        for player in &players_in_set {
-            let player = public_state.get_mut(&player.name).unwrap();
-            *player = score_round(*player);
-        }
-        players.rotate_left(1);
-    }
-    let winners = determine_total_winners(&players, &public_state);
 
-    let players_vec: Vec<Player> = players.into_iter().collect_vec();
-    communicator.write_to_all(Message::Winners {
-        players: players_vec,
-        winner_indices: winners,
-    });
+            while players_in_set
+                .front()
+                .filter(|p| !p.hand.is_empty())
+                .is_some()
+            {
+                let mut trick = Trick::new();
+                for player in &mut players_in_set {
+                    let hand;
+                    if player.human {
+                        (hand, trick) =
+                            play_human_card(communicator, player, player.hand.clone(), trick);
+                    } else {
+                        (hand, trick) = play_card(player.hand.clone(), trick);
+                    }
+                    player.hand = hand;
+                    communicator.write_to_all(Message::Trick(trick.clone()));
+                }
+                let index = determine_winner(&trick);
+                let winner = &players_in_set[index];
+                public_state.get_mut(&winner.name).unwrap().wins += 1;
+                communicator.write_to_all(Message::Scoreboard {
+                    state: public_state.clone(),
+                });
+                communicator.write_to_all(Message::Winner(winner.clone()));
+                players_in_set.rotate_left(index);
+            }
+            for player in &players_in_set {
+                let player = public_state.get_mut(&player.name).unwrap();
+                *player = score_round(*player);
+            }
+            players.rotate_left(1);
+        }
+        let winners = determine_total_winners(&players, &public_state);
+
+        let players_vec: Vec<Player> = players.into_iter().collect_vec();
+        communicator.write_to_all(Message::Winners {
+            players: players_vec,
+            winner_indices: winners,
+        });
+        games += 1;
+        if games == game_count {
+            communicator.write_to_all(Message::GameOver);
+            return;
+        }
+    }
 }
 
 fn make_guess(hand: &Vec<Card>, guesses: &Vec<usize>, players: usize) -> usize {

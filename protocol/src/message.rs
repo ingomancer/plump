@@ -44,4 +44,5 @@ pub enum Message {
     RequestPlayerName,
     PlayRequest(Player),
     RequestGuess,
+    GameOver,
 }

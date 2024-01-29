@@ -168,6 +168,10 @@ fn format_request_player_name() -> String {
     "Please input player name: ".to_owned()
 }
 
+fn format_game_over() -> String {
+    "Game over!".to_owned()
+}
+
 impl ToString for Message {
     fn to_string(&self) -> String {
         match self {
@@ -202,6 +206,7 @@ impl ToString for Message {
             Message::RequestPlayerName => format_request_player_name(),
             Message::PlayRequest(player) => format_play_request(player),
             Message::RequestGuess => format_request_guess(),
+            Message::GameOver => format_game_over(),
         }
     }
 }

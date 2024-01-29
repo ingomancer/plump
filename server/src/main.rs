@@ -181,7 +181,7 @@ async fn main() -> IoResult<()> {
 
     let players = create_players(player_names_and_types);
     let running_game =
-        tokio::spawn(async move { game(&mut communicator, players, num_rounds).await });
+        tokio::spawn(async move { game(&mut communicator, players, num_rounds, args.ai).await });
     let reconnect_handler = tokio::spawn(async move {
         while let Ok(request) = reconnect_receiver.recv() {
             println!("Reconnecting player {}.", request.player);

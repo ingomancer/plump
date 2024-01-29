@@ -3,7 +3,6 @@ resolver = "2"
 members = ["server", "client", "protocol", "playing_cards"]
 
 [workspace.lints.rust]
-unsafe_code = "deny"
 keyword_idents = "warn"
 missing_copy_implementations = "warn"
 non_ascii_idents = "warn"

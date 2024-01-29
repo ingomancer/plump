@@ -90,6 +90,8 @@ async fn main() -> Result<()> {
                         winner_indices: _,
                     } => {
                         println!("{}", message.to_string());
+                    }
+                    Message::GameOver => {
                         return Ok(());
                     }
                     _ => (),
