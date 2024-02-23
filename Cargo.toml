@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["server", "client", "protocol", "playing_cards"]
+members = ["server", "client", "protocol", "playing_cards", "api"]
 
 [workspace.lints.rust]
 keyword_idents = "warn"

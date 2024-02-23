@@ -24,6 +24,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a30da5c5f2d5e72842e00bcb57657162cdabef0931f40e2deb9b4140440cecd"
 
 [[package]]
+name = "anyhow"
+version = "1.0.71"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
+
+[[package]]
+name = "api"
+version = "0.1.0"
+dependencies = [
+ "protocol",
+ "serde-generate",
+ "serde-reflection",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -116,7 +133,7 @@ version = "4.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8cd2b2a819ad6eec39e8f1d6b53001af1e5469f8c177579cdaeb313115b825f"
 dependencies = [
- "heck",
+ "heck 0.4.1",
  "proc-macro2 1.0.76",
  "quote 1.0.35",
  "syn 2.0.48",
@@ -275,6 +292,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c80984affa11d98d1b88b66ac8853f143217b399d3c74116778ff8fdb4ed2e"
 
 [[package]]
+name = "glob"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
+name = "heck"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,6 +317,30 @@ name = "hermit-abi"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "443144c8cdadd93ebf52ddb4056d257f5b52c04d3c804e657d19eb73fc33668b"
+
+[[package]]
+name = "include_dir"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24b56e147e6187d61e9d0f039f10e070d0c0a887e24fe0bb9ca3f29bfde62cab"
+dependencies = [
+ "glob",
+ "include_dir_impl",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "include_dir_impl"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a0c890c85da4bab7bce4204c707396bbd3c6c8a681716a51c8814cfc2b682df"
+dependencies = [
+ "anyhow",
+ "proc-macro-hack",
+ "proc-macro2 1.0.76",
+ "quote 1.0.35",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "itertools"
@@ -414,6 +470,12 @@ name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.5.20+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
@@ -571,6 +633,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
+
+[[package]]
 name = "rusty-fork"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -595,6 +663,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63261df402c67811e9ac6def069e4786148c4563f4b50fd4bf30aa370d626b02"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-generate"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8c9331265d81c61212dc75df7b0836544ed8e32dba77a522f113805ff9a948e"
+dependencies = [
+ "heck 0.3.3",
+ "include_dir",
+ "serde",
+ "serde-reflection",
+ "textwrap",
+]
+
+[[package]]
+name = "serde-reflection"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f05a5f801ac62a51a49d378fdb3884480041b99aced450b28990673e8ff99895"
+dependencies = [
+ "once_cell",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -645,6 +737,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "smawk"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
+
+[[package]]
 name = "socket2"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,6 +750,25 @@ checksum = "64a4a911eed85daf18834cfaa86a79b7d266ff93ff5ba14005426219480ed662"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "strum"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "723b93e8addf9aa965ebe2d11da6d7540fa2283fcea14b3371ff055f7ba13f5f"
+
+[[package]]
+name = "strum_macros"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a3417fc93d76740d974a01654a09777cb500428cc874ca9f45edfe0c4d4cd18"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2 1.0.76",
+ "quote 1.0.35",
+ "rustversion",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -663,6 +780,17 @@ dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "unicode-xid",
+]
+
+[[package]]
+name = "syn"
+version = "1.0.109"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
+dependencies = [
+ "proc-macro2 1.0.76",
+ "quote 1.0.35",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -687,6 +815,36 @@ dependencies = [
  "redox_syscall",
  "rustix",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "textwrap"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd05616119e612a8041ef58f2b578906cc2531a6069047ae092cfb86a325d835"
+dependencies = [
+ "smawk",
+ "unicode-width",
+]
+
+[[package]]
+name = "thiserror"
+version = "1.0.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e45bcbe8ed29775f228095caf2cd67af7a4ccf756ebff23a306bf3e8b47b24b"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a953cb265bef375dae3de6663da4d3804eee9682ea80d8e2542529b73c531c81"
+dependencies = [
+ "proc-macro2 1.0.76",
+ "quote 1.0.35",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -729,6 +887,18 @@ name = "unicode-ident"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5464a87b239f13a63a501f2701565754bae92d243d4bb7eb12f6d57d2269bf4"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4c87d22b6e3f4a18d4d40ef354e97c90fcb14dd91d7dc0aa9d8a1172ebf7202"
+
+[[package]]
+name = "unicode-width"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51733f11c9c4f72aa0c160008246859e340b00807569a0da0e7a1079b27ba85"
 
 [[package]]
 name = "unicode-xid"

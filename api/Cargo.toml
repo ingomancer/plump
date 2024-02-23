@@ -1,0 +1,22 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde-reflection = { version = "0.3.6", default-features = false }
+serde-generate = { version = "0.25.1", features = [
+    "python3",
+    "cpp",
+    "java",
+    "typescript",
+    "csharp",
+], default-features = false }
+protocol = { path = "../protocol" }
+strum = "0.26.1"
+strum_macros = "0.26.1"
+
+[lints]
+workspace = true
