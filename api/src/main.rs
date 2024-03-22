@@ -1,8 +1,9 @@
 use protocol::message::Message;
+use serde_generate::SourceInstaller;
 use serde_reflection::Tracer;
 use serde_reflection::TracerConfig;
-use std::fs::File;
-use std::io::Write;
+use std::path::PathBuf;
+use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -30,36 +31,49 @@ fn generate_spec(
 ) {
     match language {
         Languages::Python => {
-            let generator = serde_generate::python3::CodeGenerator::new(config);
-            let mut source = Vec::new();
-            let _ = generator.output(&mut source, registry);
-            let filepath = "langs/python/protocol.py";
-            let mut file = File::create(filepath).unwrap();
-            file.write_all(&source).unwrap();
+            let path = "langs/python/";
+            let path = PathBuf::from_str(path).unwrap();
+            let installer = serde_generate::python3::Installer::new(path, None);
+            installer.install_module(config, registry).unwrap();
+            installer.install_serde_runtime().unwrap();
+            installer.install_bincode_runtime().unwrap();
+            installer.install_bcs_runtime().unwrap();
         }
         Languages::Cpp => {
-            let generator = serde_generate::cpp::CodeGenerator::new(config);
-            let mut source = Vec::new();
-            let _ = generator.output(&mut source, registry);
-            let filepath = "langs/cpp/protocol.cpp";
-            let mut file = File::create(filepath).unwrap();
-            file.write_all(&source).unwrap();
+            let path = "langs/cpp/";
+            let path = PathBuf::from_str(path).unwrap();
+            let installer = serde_generate::cpp::Installer::new(path);
+            installer.install_module(config, registry).unwrap();
+            installer.install_serde_runtime().unwrap();
+            installer.install_bincode_runtime().unwrap();
+            installer.install_bcs_runtime().unwrap();
         }
         Languages::Java => {
-            let generator = serde_generate::java::CodeGenerator::new(config);
-            let _ = generator.write_source_files("langs/java/".into(), registry);
+            let path = "langs/java/";
+            let path = PathBuf::from_str(path).unwrap();
+            let installer = serde_generate::java::Installer::new(path);
+            installer.install_module(config, registry).unwrap();
+            installer.install_serde_runtime().unwrap();
+            installer.install_bincode_runtime().unwrap();
+            installer.install_bcs_runtime().unwrap();
         }
         Languages::Typescript => {
-            let generator = serde_generate::typescript::CodeGenerator::new(config);
-            let mut source = Vec::new();
-            let _ = generator.output(&mut source, registry);
-            let filepath = "langs/typescript/protocol.ts";
-            let mut file = File::create(filepath).unwrap();
-            file.write_all(&source).unwrap();
+            let path = "langs/ts/";
+            let path = PathBuf::from_str(path).unwrap();
+            let installer = serde_generate::typescript::Installer::new(path);
+            installer.install_module(config, registry).unwrap();
+            installer.install_serde_runtime().unwrap();
+            installer.install_bincode_runtime().unwrap();
+            installer.install_bcs_runtime().unwrap();
         }
         Languages::Csharp => {
-            let generator = serde_generate::csharp::CodeGenerator::new(config);
-            let _ = generator.write_source_files("langs/csharp/".into(), registry);
+            let path = "langs/csharp/";
+            let path = PathBuf::from_str(path).unwrap();
+            let installer = serde_generate::csharp::Installer::new(path);
+            installer.install_module(config, registry).unwrap();
+            installer.install_serde_runtime().unwrap();
+            installer.install_bincode_runtime().unwrap();
+            installer.install_bcs_runtime().unwrap();
         }
     }
 }

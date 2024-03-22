@@ -42,6 +42,7 @@ async fn main() -> Result<()> {
     let mut socket = TcpStream::connect((args.address, args.port))
         .await
         .map_err(Error::Connect)?;
+    socket.set_nodelay(true).expect("set_nodelay failed");
 
     if args.ai {
         let name: String = rand::thread_rng()

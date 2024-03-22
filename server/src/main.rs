@@ -153,6 +153,7 @@ async fn main() -> IoResult<()> {
     for _ in 0..(num_players) {
         let mut remote_client = match listener.incoming().next().unwrap() {
             Ok(stream) => {
+                stream.set_nodelay(true).expect("set_nodelay failed");
                 if args.ai {
                     network::Client::RemoteJson(stream)
                 } else {
