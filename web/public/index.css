@@ -1,0 +1,381 @@
+* {
+    margin: 0;
+    border: 0;
+    padding: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-weight: normal;
+}
+
+html,
+body {
+    width: 100vw;
+    height: 100vh;
+    background-color: hsl(0, 0%, 90%);
+}
+
+#dialog {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 100;
+    background-color: hsla(0, 0%, 50%, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#dialog form {
+    display: flex;
+    gap: 10px;
+    flex-direction: column;
+    min-width: 400px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 4px;
+}
+
+input {
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+button:not(.card) {
+    padding: 10px 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.card {
+    aspect-ratio: 111/162;
+    height: 120px;
+    margin: 4px;
+    background-position: center;
+    background-size: contain;
+    background-origin: content-box;
+    background-repeat: no-repeat;
+}
+
+.trick .card {
+    height: 140px;
+}
+
+button.card:hover {
+    cursor: pointer;
+}
+
+main {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr min-content;
+    grid-template-rows: 1fr min-content min-content;
+}
+
+.the-table {
+    display: flex;
+    background-color: #eee;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+
+.trick {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.players {
+    background-color: hsla(0, 0%, 0%, 0.1);
+}
+
+.players table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+}
+
+.players thead {
+    background-color: hsla(0, 0%, 0%, 0.2);
+}
+
+.players td,
+.players th {
+    padding: 8px;
+}
+
+.players th:first-child,
+.players td:first-child {
+    text-align: left;
+}
+
+.guess,
+.hand {
+    grid-column: 1 / 3;
+    background-color: hsla(0, 0%, 0%, 0.2);
+}
+
+.guess>*,
+.hand>* {
+    margin: 4px;
+}
+
+.guess {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-bottom: 1px solid hsla(0, 0%, 65%);
+    z-index: 1;
+}
+
+.guess .values {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+}
+
+.guess .values button {
+    flex-grow: 1;
+    margin: 4px;
+}
+
+.hand {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    gap: 4px;
+}
+
+.card.spades,
+.card.clubs {
+    color: black;
+}
+
+.card.hearts,
+.card.diamonds {
+    color: red;
+}
+
+/* Playing cards from https://code.google.com/archive/p/vector-playing-cards/ */
+
+.card.ace.spades {
+    background-image: url('cards.svg#ace-spades');
+}
+
+.card.ace.hearts {
+    background-image: url('cards.svg#ace-hearts');
+}
+
+.card.ace.diamonds {
+    background-image: url('cards.svg#ace-diamonds');
+}
+
+.card.ace.clubs {
+    background-image: url('cards.svg#ace-clubs');
+}
+
+.card.two.spades {
+    background-image: url('cards.svg#two-spades');
+}
+
+.card.two.hearts {
+    background-image: url('cards.svg#two-hearts');
+}
+
+.card.two.diamonds {
+    background-image: url('cards.svg#two-diamonds');
+}
+
+.card.two.clubs {
+    background-image: url('cards.svg#two-clubs');
+}
+
+.card.three.spades {
+    background-image: url('cards.svg#three-spades');
+}
+
+.card.three.hearts {
+    background-image: url('cards.svg#three-hearts');
+}
+
+.card.three.diamonds {
+    background-image: url('cards.svg#three-diamonds');
+}
+
+.card.three.clubs {
+    background-image: url('cards.svg#three-clubs');
+}
+
+.card.four.spades {
+    background-image: url('cards.svg#four-spades');
+}
+
+.card.four.hearts {
+    background-image: url('cards.svg#four-hearts');
+}
+
+.card.four.diamonds {
+    background-image: url('cards.svg#four-diamonds');
+}
+
+.card.four.clubs {
+    background-image: url('cards.svg#four-clubs');
+}
+
+.card.five.spades {
+    background-image: url('cards.svg#five-spades');
+}
+
+.card.five.hearts {
+    background-image: url('cards.svg#five-hearts');
+}
+
+.card.five.diamonds {
+    background-image: url('cards.svg#five-diamonds');
+}
+
+.card.five.clubs {
+    background-image: url('cards.svg#five-clubs');
+}
+
+.card.six.spades {
+    background-image: url('cards.svg#six-spades');
+}
+
+.card.six.hearts {
+    background-image: url('cards.svg#six-hearts');
+}
+
+.card.six.diamonds {
+    background-image: url('cards.svg#six-diamonds');
+}
+
+.card.six.clubs {
+    background-image: url('cards.svg#six-clubs');
+}
+
+.card.seven.spades {
+    background-image: url('cards.svg#seven-spades');
+}
+
+.card.seven.hearts {
+    background-image: url('cards.svg#seven-hearts');
+}
+
+.card.seven.diamonds {
+    background-image: url('cards.svg#seven-diamonds');
+}
+
+.card.seven.clubs {
+    background-image: url('cards.svg#seven-clubs');
+}
+
+.card.eight.spades {
+    background-image: url('cards.svg#eight-spades');
+}
+
+.card.eight.hearts {
+    background-image: url('cards.svg#eight-hearts');
+}
+
+.card.eight.diamonds {
+    background-image: url('cards.svg#eight-diamonds');
+}
+
+.card.eight.clubs {
+    background-image: url('cards.svg#eight-clubs');
+}
+
+.card.nine.spades {
+    background-image: url('cards.svg#nine-spades');
+}
+
+.card.nine.hearts {
+    background-image: url('cards.svg#nine-hearts');
+}
+
+.card.nine.diamonds {
+    background-image: url('cards.svg#nine-diamonds');
+}
+
+.card.nine.clubs {
+    background-image: url('cards.svg#nine-clubs');
+}
+
+.card.ten.spades {
+    background-image: url('cards.svg#ten-spades');
+}
+
+.card.ten.hearts {
+    background-image: url('cards.svg#ten-hearts');
+}
+
+.card.ten.diamonds {
+    background-image: url('cards.svg#ten-diamonds');
+}
+
+.card.ten.clubs {
+    background-image: url('cards.svg#ten-clubs');
+}
+
+.card.jack.spades {
+    background-image: url('cards.svg#jack-spades');
+}
+
+.card.jack.hearts {
+    background-image: url('cards.svg#jack-hearts');
+}
+
+.card.jack.diamonds {
+    background-image: url('cards.svg#jack-diamonds');
+}
+
+.card.jack.clubs {
+    background-image: url('cards.svg#jack-clubs');
+}
+
+.card.queen.spades {
+    background-image: url('cards.svg#queen-spades');
+}
+
+.card.queen.hearts {
+    background-image: url('cards.svg#queen-hearts');
+}
+
+.card.queen.diamonds {
+    background-image: url('cards.svg#queen-diamonds');
+}
+
+.card.queen.clubs {
+    background-image: url('cards.svg#queen-clubs');
+}
+
+.card.king.spades {
+    background-image: url('cards.svg#king-spades');
+}
+
+.card.king.hearts {
+    background-image: url('cards.svg#king-hearts');
+}
+
+.card.king.diamonds {
+    background-image: url('cards.svg#king-diamonds');
+}
+
+.card.king.clubs {
+    background-image: url('cards.svg#king-clubs');
+}

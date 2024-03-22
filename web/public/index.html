@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Plump</title>
+        <link href="index.css" rel="stylesheet" type="text/css">
+        <script type="module">
+            import { h, Component, render as renderInto } from 'https://esm.sh/preact'
+
+            const element = name => (...args) => h(name, ...args)
+
+            const main = element('main')
+            const div = element('div')
+
+            const table = element('table')
+            const thead = element('thead')
+            const tbody = element('tbody')
+            const tr = element('tr')
+            const th = element('th')
+            const td = element('td')
+
+            const form = element('form')
+            const input = element('input')
+            const button = element('button')
+            const span = element('span')
+
+            const dialog = (...contents) => div({ id: 'dialog', }, contents)
+
+            const range = length => [...Array(length).keys()]
+            const withFields = (base, fields) => Object.assign({}, base, fields)
+            const withCommands = (state, ...commands) => [state, commands]
+
+            const typeMap = (...keys) => Object.fromEntries(keys.map(name => [name, Symbol(name)]))
+
+            const messageType = typeMap(
+                'join', 'changeName', 'turn', 'guessContext', 'requestGuess', 'guess',
+                'scoreboard', 'playContext', 'playRequest', 'play', 'trick', 'winner', 'winners'
+            )
+
+            const message = type => ({ type, })
+            const join = message(messageType.join)
+            const changeName = value => withFields(message(messageType.changeName), { value, })
+            const turn = whose => withFields(message(messageType.turn), { whose, })
+            const guessContext = ({ hand, guesses, players, }) => withFields(message(messageType.guessContext), { hand, guesses, players, })
+            const requestGuess = message(messageType.requestGuess)
+            const guess = value => withFields(message(messageType.guess), { value, })
+            const scoreboard = byPlayer => withFields(message(messageType.scoreboard), { byPlayer, })
+            const playContext = ({ hand, player, trick, }) => withFields(message(messageType.playContext), { hand, player, trick, })
+            const playRequest = message(messageType.playRequest)
+            const play = index => withFields(message(messageType.play), { index, })
+            const trick = trick => withFields(message(messageType.trick), { trick, })
+            const winner = player => withFields(message(messageType.winner), { player, })
+            const winners = names => withFields(message(messageType.winners), { names, })
+
+            const commandType = typeMap('httpPost')
+
+            const command = type => ({ type, })
+            const httpPost = (url, body) => withFields(command(commandType.httpPost), { url, body, })
+
+            const undefinedToNull = v => v === undefined ? null : v
+            const cleanName = name => name.replace(/^\|/, '')
+
+            const update = (state, message) => {
+                switch (message.type) {
+                    case messageType.changeName: return withCommands(withFields(state, { name: message.value, }))
+                    case messageType.join: return withCommands(withFields(state, { dialog: false, }), httpPost('/api/join', { name: state.name, }))
+                    case messageType.turn: return withCommands(withFields(state, { status: `It's ${cleanName(message.whose.name)}'s turn.`, }))
+
+                    case messageType.guessContext: {
+                        const { hand, guesses, players: numPlayers, } = message
+                        const players = range(numPlayers).map(i => ({ name: `Player ${i}`, guess: undefinedToNull(guesses[i]), wins: 0, score: 0, }))
+                        const maxGuess = hand.length
+
+                        return withCommands(withFields(state, { hand, players, maxGuess, }))
+                    }
+
+                    case messageType.requestGuess: return withCommands(withFields(state, { guess: true, }))
+                    case messageType.guess: return withCommands(withFields(state, { guess: false, }), httpPost('/api/guess', { value: message.value, }))
+
+                    case messageType.scoreboard: {
+                        const names = Array.from(Object.keys(message.byPlayer)).sort()
+                        const players = names.map(name => withFields(message.byPlayer[name], { name: cleanName(name), }))
+                        return withCommands(withFields(state, { players, }))
+                    }
+
+                    case messageType.playContext: {
+                        const { hand, trick, } = message
+                        return withCommands(withFields(state, { trick, hand, }))
+                    }
+
+                    case messageType.playRequest: return withCommands(withFields(state, { play: true, }))
+                    case messageType.play: return withCommands(withFields(state, { play: false, }), httpPost('/api/play', { index: message.index, }))
+                    case messageType.trick: return withCommands(withFields(state, { trick: message.trick, }))
+
+                    case messageType.winner: {
+                        const status = `${cleanName(message.player.name)} won!`
+                        return withCommands(withFields(state, { status, trick: [], }))
+                    }
+
+                    case messageType.winners: {
+                        const { names, } = message
+                        const status = names.length === 1 ? `The winner is ${cleanName(names[0])}!` : `The winners are ${names.map(cleanName).join(', ')}!`
+                        return withCommands(withFields(state, { status, trick: [], }))
+                    }
+
+                    default: return withCommands(state)
+                }
+            }
+
+            const messagesFromServerEvent = event => {
+                const type = typeof event === 'object' ? Object.keys(event)[0] : event
+                const payload = typeof event === 'object' ? event[type] : {}
+
+                switch (type) {
+                    case 'RequestGuessContext': return [guessContext(payload)]
+                    case 'Guesses': return [scoreboard(payload.state)]
+                    case 'Turn': return [turn(payload.whose)]
+                    case 'PlayRequestContext': return [playContext(payload)]
+                    case 'Trick': return [trick(payload)]
+                    case 'Scoreboard': return [scoreboard(payload.state)]
+                    case 'Winner': return [winner(payload)]
+                    case 'Winners': return [winners(payload.winner_indices.map(i => payload.players[i].name))]
+                    case 'PlayRequest': return [playRequest]
+                    case 'RequestGuess': return [requestGuess]
+                    default: {
+                        console.log(type, payload)
+                        return []
+                    }
+                }
+            }
+
+            const onSubmit = f => e => {
+                e.preventDefault()
+                f(e)
+            }
+
+            const onInput = f => e => {
+                f(e.target.value)
+            }
+
+            const cardSuitClass = value => {
+                switch (value) {
+                    case 0: return 'hearts'
+                    case 1: return 'clubs'
+                    case 2: return 'diamonds'
+                    case 3: return 'spades'
+                    default: return null
+                }
+            }
+
+            const cardValueClass = value => {
+                switch (value) {
+                    case 0: return 'two'
+                    case 1: return 'three'
+                    case 2: return 'four'
+                    case 3: return 'five'
+                    case 4: return 'six'
+                    case 5: return 'seven'
+                    case 6: return 'eight'
+                    case 7: return 'nine'
+                    case 8: return 'ten'
+                    case 9: return 'jack'
+                    case 10: return 'queen'
+                    case 11: return 'king'
+                    case 12: return 'ace'
+                    default: return null
+                }
+            }
+
+            const cardClass = ({ suit, value, }) => `card ${cardSuitClass(suit)} ${cardValueClass(value)}`
+
+            const createRenderer = send => {
+                const joinDialog = state => dialog(null,
+                    form({ onsubmit: onSubmit(() => send(join)), },
+                        input({ type: 'text', placeholder: 'Player name', name: 'name', autofocus: true, value: state.name, oninput: onInput(s => send(changeName(s))), }),
+                        button({ type: 'submit', }, 'Join'),
+                    )
+                )
+
+                const players = value => div({ class: 'players', }, table(null,
+                    thead(null, tr(null,
+                        th(null, 'Name'),
+                        th(null, 'Guess'),
+                        th(null, 'Wins'),
+                        th(null, 'Score'),
+                    )),
+                    tbody(null, value.map(p => tr(null,
+                        td(null, p.name),
+                        td(null, p.guess === null ? '-' : p.guess.toString()),
+                        td(null, p.wins.toString()),
+                        td(null, p.score.toString()),
+                    )))
+                ))
+
+                const card = (playable, index, card) => {
+                    const base = { class: cardClass(card), }
+
+                    if (playable) {
+                        return button(withFields(base, { onclick: () => send(play(index)) }))
+                    }
+
+                    return div(base)
+                }
+
+                const trick = value => div({ class: 'trick', }, value.map((c, i) => card(false, i, c)))
+
+                const theTable = state => div({ class: 'the-table', }, trick(state.trick), span(null, state.status))
+
+                const selectGuess = max => div({ class: 'guess', }, span(null, 'Make a guess:'), div({ class: 'values', },
+                    range(1 + max).map(i => button({ onclick: () => send(guess(i)) }, i.toString()))
+                ))
+
+                const hand = state => div({ class: 'hand', }, state.hand.map((c, i) => card(state.play, i, c)))
+
+                const render = state => [
+                    state.dialog ? joinDialog(state) : div(),
+                    main(null, theTable(state), players(state.players), state.guess ? selectGuess(state.maxGuess) : div(), hand(state)),
+                ]
+
+                return render
+            }
+
+            const execute = (send, command) => {
+                switch (command.type) {
+                    case commandType.httpPost: {
+                        fetch(command.url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', },
+                            body: JSON.stringify(command.body),
+                        })
+                            .then(async (response) => {
+                                if (!response.ok) {
+                                    throw new Error(`request failed with status: ${response.status}`)
+                                }
+
+                                console.log('ok!')
+                            })
+                            .catch(err => {
+                                console.error(err)
+                            })
+
+                        break;
+                    }
+
+                    default: break;
+                }
+            }
+
+            const start = async () => {
+                const target = document.body
+
+                let state = {
+                    dialog: true,
+                    guess: false,
+                    maxGuess: 0,
+                    play: false,
+                    name: '',
+                    status: 'Awaiting players...',
+                    trick: [],
+                    hand: [],
+                    players: [],
+                }
+
+                let updateView = null
+
+                const send = message => {
+                    console.log(message)
+                    const [newState, commands] = update(state, message)
+                    state = newState
+                    console.log(state)
+
+                    for (const command of commands) {
+                        console.log(command)
+                        execute(send, command)
+                    }
+
+                    updateView()
+                }
+
+                const render = createRenderer(send)
+
+                updateView = () => renderInto(render(state), target)
+
+                const source = new EventSource('/api/events', {})
+                source.onmessage = (event) => {
+                    const messages = messagesFromServerEvent(JSON.parse(event.data))
+                    messages.forEach(send)
+                }
+
+                updateView()
+            }
+
+            document.addEventListener('DOMContentLoaded', () => start().catch(e => console.error(e)))
+        </script>
+    </head>
+    <body></body>
+</html>
