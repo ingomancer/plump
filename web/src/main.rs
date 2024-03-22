@@ -4,7 +4,7 @@ use std::{
 };
 
 use rocket::{
-    fs::FileServer,
+    fs::{relative, FileServer},
     get, launch, post,
     response::stream::{Event, EventStream},
     routes,
@@ -230,5 +230,5 @@ fn play(action: Json<Play>) {
 fn rocket() -> _ {
     rocket::build()
         .mount("/", routes![events, join, guess, play])
-        .mount("/", FileServer::from("./node/public"))
+        .mount("/", FileServer::from(relative!("public")))
 }
