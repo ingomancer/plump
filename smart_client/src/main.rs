@@ -1,15 +1,17 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{Error as IoError, ErrorKind, Result as IoResult},
     net::IpAddr,
-    os::unix::thread,
     result::Result as StdResult,
 };
 
 use clap::Parser;
 use playing_cards::structs::Card;
-use protocol::message::Message;
-use rand::{distributions::Alphanumeric, seq::IteratorRandom, thread_rng, Rng};
+use protocol::{
+    message::Message,
+    structs::{PlayerName, PublicState},
+};
+use rand::{distributions::Alphanumeric, Rng};
 use tokio::{
     io::{copy, stdin, stdout, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -51,56 +53,64 @@ async fn main() -> Result<()> {
             .map(char::from)
             .map(|c| c.to_uppercase().to_string())
             .collect::<String>();
-
+        let mut guess_achieved = false;
+        let mut last_scoreboard: Option<HashMap<PlayerName, PublicState>> = None;
         loop {
             let server_message = readline_from_remote(&mut socket).await.unwrap();
 
             for line in server_message.lines() {
                 let message: Message = serde_json::from_str(line).unwrap();
-
                 match message {
-                    // Message::RequestGuessContext {
-                    //     player: _,
-                    //     hand,
-                    //     guesses,
-                    //     players,
-                    // } => {
-                    //     let guess = make_guess(players, hand, guesses);
-                    //     send_to_remote(&mut socket, guess.to_string() + "\n")
-                    //         .await
-                    //         .unwrap();
-                    // }
-                    // Message::PlayRequestContext {
-                    //     player: _,
-                    //     hand,
-                    //     trick: _,
-                    //     valid_cards,
-                    // } => {
-                    //     let play = make_play(hand, valid_cards);
-                    //     send_to_remote(&mut socket, play.to_string() + "\n")
-                    //         .await
-                    //         .unwrap();
-                    // }
-                    // Message::RequestPlayerName => {
-                    //     send_to_remote(&mut socket, name.to_string() + "\n")
-                    //         .await
-                    //         .unwrap();
-                    // }
-                    // Message::Winners {
-                    //     players: _,
-                    //     winner_indices: _,
-                    // } => {
-                    //     println!("{}", message.to_string());
-                    // }
-                    // Message::GameOver => {
-                    //     return Ok(());
-                    // }
-                    _ => send_to_remote(
-                        &mut socket,
-                        format!("{}\n", (0..10).choose(&mut thread_rng()).unwrap()),
-                    )
-                    .await
-                    .unwrap(),
+                    Message::RequestGuessContext {
+                        player: _,
+                        hand,
+                        guesses,
+                        players,
+                    } => {
+                        let guess = make_guess(players, hand, guesses);
+                        send_to_remote(&mut socket, guess.to_string() + "\n")
+                            .await
+                            .unwrap();
+                    }
+                    Message::PlayRequestContext {
+                        player: _,
+                        hand,
+                        trick: _,
+                        valid_cards,
+                    } => {
+                        let play = make_play(hand, valid_cards, guess_achieved);
+                        send_to_remote(&mut socket, play.to_string() + "\n")
+                            .await
+                            .unwrap();
+                    }
+                    Message::RequestPlayerName => {
+                        send_to_remote(&mut socket, name.to_string() + "\n")
+                            .await
+                            .unwrap();
+                    }
+                    Message::Winners {
+                        players: _,
+                        winner_indices: _,
+                    } => {
+                        println!("{}", message.to_string());
+                        guess_achieved = false;
+                        print!("Scores: ");
+                        for (name, state) in last_scoreboard.clone().unwrap().iter() {
+                            print! {"{}: {}, ", name.0, state.score}
+                        }
+                        println!();
+                    }
+                    Message::GameOver => {
+                        return Ok(());
+                    }
+                    Message::Scoreboard { state } => {
+                        let my_state = state.get(&PlayerName(name.clone())).unwrap();
+                        if my_state.guess.unwrap() == my_state.wins {
+                            guess_achieved = true;
+                        }
+                        last_scoreboard = Some(state);
+                    }
+                    _ => (),
                 }
             }
         }
@@ -124,10 +134,26 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn make_play(hand: Vec<Card>, valid_cards: Option<HashSet<usize>>) -> usize {
+fn make_play(hand: Vec<Card>, valid_cards: Option<HashSet<usize>>, guess_achieved: bool) -> usize {
     valid_cards.map_or_else(
-        || rand::thread_rng().gen_range(0..hand.len()),
-        |choices| *choices.iter().next().unwrap(),
+        || {
+            if guess_achieved {
+                hand.iter()
+                    .position(|&card| card == *hand.iter().min().unwrap())
+                    .unwrap()
+            } else {
+                hand.iter()
+                    .position(|&card| card == *hand.iter().max().unwrap())
+                    .unwrap()
+            }
+        },
+        |choices| {
+            if guess_achieved {
+                *choices.iter().min().unwrap()
+            } else {
+                *choices.iter().max().unwrap()
+            }
+        },
     )
 }
 

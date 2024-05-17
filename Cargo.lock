@@ -737,6 +737,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "smart_client"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "playing_cards",
+ "protocol",
+ "rand",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "smawk"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

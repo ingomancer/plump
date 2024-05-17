@@ -3,7 +3,7 @@ use playing_cards::{
     helpers::{create_deck, draw_hand},
     structs::Card,
 };
-use rand::seq::IteratorRandom;
+use rand::seq::{IteratorRandom, SliceRandom};
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
@@ -38,9 +38,10 @@ where
     C: Communicator,
 {
     let mut games = 0;
-    let game_count = if ai { 1000 } else { u32::MAX };
+    let game_count = if ai { 100 } else { u32::MAX };
     loop {
         let mut players = players.clone();
+        players.make_contiguous().shuffle(&mut rand::thread_rng());
         let mut down_sets: Vec<usize> = (1..=num_rounds).rev().collect();
         let mut singles: Vec<usize> = (1..players.len()).map(|_| 1).collect();
         let mut up_sets: Vec<usize> = (2..=num_rounds).collect();
