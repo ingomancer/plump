@@ -122,10 +122,14 @@ where
         let winners = determine_total_winners(&players, &public_state);
 
         let players_vec: Vec<Player> = players.into_iter().collect_vec();
-        communicator.write_to_all(Message::Winners {
+        let winmsg = Message::Winners {
             players: players_vec,
             winner_indices: winners,
-        });
+        };
+        communicator.write_to_all(winmsg.clone());
+        if ai {
+            println!("{}", winmsg.to_string());
+        }
         games += 1;
         if games == game_count {
             communicator.write_to_all(Message::GameOver);

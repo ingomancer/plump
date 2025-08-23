@@ -2,9 +2,11 @@ use std::{
     collections::HashSet,
     io::{Error as IoError, ErrorKind, Result as IoResult},
     net::IpAddr,
-    os::unix::thread,
     result::Result as StdResult,
 };
+
+#[cfg(unix)]
+use std::os::unix::thread;
 
 use clap::Parser;
 use playing_cards::structs::Card;
@@ -16,6 +18,7 @@ use tokio::{
     task::JoinError,
 };
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
     Connect(IoError),
@@ -56,51 +59,51 @@ async fn main() -> Result<()> {
             let server_message = readline_from_remote(&mut socket).await.unwrap();
 
             for line in server_message.lines() {
-                let message: Message = serde_json::from_str(line).unwrap();
-
-                match message {
-                    // Message::RequestGuessContext {
-                    //     player: _,
-                    //     hand,
-                    //     guesses,
-                    //     players,
-                    // } => {
-                    //     let guess = make_guess(players, hand, guesses);
-                    //     send_to_remote(&mut socket, guess.to_string() + "\n")
-                    //         .await
-                    //         .unwrap();
-                    // }
-                    // Message::PlayRequestContext {
-                    //     player: _,
-                    //     hand,
-                    //     trick: _,
-                    //     valid_cards,
-                    // } => {
-                    //     let play = make_play(hand, valid_cards);
-                    //     send_to_remote(&mut socket, play.to_string() + "\n")
-                    //         .await
-                    //         .unwrap();
-                    // }
-                    // Message::RequestPlayerName => {
-                    //     send_to_remote(&mut socket, name.to_string() + "\n")
-                    //         .await
-                    //         .unwrap();
-                    // }
-                    // Message::Winners {
-                    //     players: _,
-                    //     winner_indices: _,
-                    // } => {
-                    //     println!("{}", message.to_string());
-                    // }
-                    // Message::GameOver => {
-                    //     return Ok(());
-                    // }
-                    _ => send_to_remote(
-                        &mut socket,
-                        format!("{}\n", (0..10).choose(&mut thread_rng()).unwrap()),
-                    )
-                    .await
-                    .unwrap(),
+                if let Ok(message) = serde_json::from_str::<Message>(line) {
+                    match message {
+                        Message::RequestGuessContext {
+                            player: _,
+                            hand,
+                            guesses,
+                            players,
+                        } => {
+                            let guess = make_guess(players, hand, guesses);
+                            send_to_remote(&mut socket, guess.to_string() + "\n")
+                                .await
+                                .unwrap();
+                        }
+                        Message::PlayRequestContext {
+                            player: _,
+                            hand,
+                            trick: _,
+                            valid_cards,
+                        } => {
+                            let play = make_play(hand, valid_cards);
+                            send_to_remote(&mut socket, play.to_string() + "\n")
+                                .await
+                                .unwrap();
+                        }
+                        Message::RequestPlayerName => {
+                            send_to_remote(&mut socket, name.to_string() + "\n")
+                                .await
+                                .unwrap();
+                        }
+                        Message::Winners {
+                            players: _,
+                            winner_indices: _,
+                        } => {
+                            println!("{}", message.to_string());
+                        }
+                        Message::GameOver => {
+                            return Ok(());
+                        }
+                        _ => send_to_remote(
+                            &mut socket,
+                            format!("{}\n", (0..10).choose(&mut thread_rng()).unwrap()),
+                        )
+                        .await
+                        .unwrap(),
+                    }
                 }
             }
         }

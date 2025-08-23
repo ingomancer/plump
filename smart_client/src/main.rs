@@ -18,6 +18,7 @@ use tokio::{
     task::JoinError,
 };
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
     Connect(IoError),
