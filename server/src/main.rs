@@ -10,6 +10,7 @@ use std::{
     collections::HashMap,
     io::Result as IoResult,
     net::{Shutdown, SocketAddr, TcpListener},
+    process::Command,
     str::FromStr,
     sync::mpsc::{channel, Receiver, Sender},
 };
@@ -176,8 +177,17 @@ async fn main() -> IoResult<()> {
     let mut player_names_and_types: Vec<(String, bool)> = vec![];
 
     let mut client_sockets = HashMap::<String, network::Client>::new();
-
+    let mut child_processes = vec![];
     for _ in 0..(num_players) {
+        if args.ai {
+            let cmd_args = ["run", "--release", "--bin", "client", "--", "--ai"];
+            let mut command = Command::new("cargo");
+            command.args(cmd_args);
+            if args.local_only {
+                command.arg("--local-only");
+            }
+            child_processes.push(command.spawn().expect("Failed to run client"));
+        }
         let stream = match listener {
             ConnectListener::TcpListener(ref tcp_listener) => {
                 match tcp_listener.incoming().next().unwrap() {

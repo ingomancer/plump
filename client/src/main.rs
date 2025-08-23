@@ -125,7 +125,9 @@ async fn main() -> Result<()> {
                             players: _,
                             winner_indices: _,
                         } => {
-                            println!("{}", message);
+                            if !args.ai {
+                                println!("{}", message);
+                            }
                         }
                         Message::GameOver => {
                             return Ok(());
