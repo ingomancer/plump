@@ -5,7 +5,27 @@ use std::{
 
 use protocol::message::Message;
 
-fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
+pub enum StreamKind {
+    Local(interprocess::local_socket::Stream),
+    Network(TcpStream),
+}
+impl StreamKind {
+    fn write(&mut self, data: &[u8]) -> Result<usize, IoError> {
+        match self {
+            StreamKind::Local(ref mut stream) => stream.write(data),
+            StreamKind::Network(ref mut tcp_stream) => tcp_stream.write(data),
+        }
+    }
+
+    fn read(&mut self, buffer: &mut [u8; 1024]) -> std::result::Result<usize, std::io::Error> {
+        match self {
+            StreamKind::Local(ref mut stream) => stream.read(buffer),
+            StreamKind::Network(ref mut tcp_stream) => tcp_stream.read(buffer),
+        }
+    }
+}
+
+fn send_to_remote(socket: &mut StreamKind, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
     while !data.is_empty() {
         let sent = socket.write(&data)?;
@@ -21,7 +41,7 @@ fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     Ok(())
 }
 
-fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
+fn readline_from_remote(socket: &mut StreamKind) -> IoResult<String> {
     const NEWLINE: u8 = 0xA;
     let mut all = Vec::<u8>::new();
     loop {
@@ -39,13 +59,13 @@ fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
             continue;
         }
 
-        return String::from_utf8(all).map_err(|_| IoError::new(ErrorKind::Other, "invalid UTF-8"));
+        return String::from_utf8(all).map_err(|_| IoError::other("invalid UTF-8"));
     }
 }
 
 pub(crate) enum Client {
-    RemoteText(TcpStream),
-    RemoteJson(TcpStream),
+    RemoteText(StreamKind),
+    RemoteJson(StreamKind),
 }
 
 impl Client {

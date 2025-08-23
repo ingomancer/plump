@@ -2,11 +2,14 @@ mod game;
 mod network;
 
 use futures::future::join_all;
+use interprocess::local_socket::{
+    traits::ListenerExt, GenericNamespaced, ListenerOptions, ToNsName,
+};
 
 use std::{
     collections::HashMap,
     io::Result as IoResult,
-    net::{Shutdown, SocketAddr, TcpListener, TcpStream},
+    net::{Shutdown, SocketAddr, TcpListener},
     str::FromStr,
     sync::mpsc::{channel, Receiver, Sender},
 };
@@ -14,6 +17,8 @@ use std::{
 use clap::Parser;
 use game::{create_players, game, Communicator};
 use protocol::{message::Message, structs::PlayerName};
+
+use crate::network::StreamKind;
 
 #[cfg(windows)]
 fn enable_colors() {
@@ -33,21 +38,21 @@ fn enable_colors() {
 
         result.as_bool().then(|| {
             mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-            unsafe { SetConsoleMode(handle, mode) }.expect("Failed to set console mode")
+            unsafe { SetConsoleMode(handle, mode) }.expect("Failed to set console mode");
         });
     }
 }
 
 struct ReconnectRequest {
     player: String,
-    return_channel: Sender<TcpStream>,
+    return_channel: Sender<StreamKind>,
 }
 
 struct CommunicatorImpl {
     sockets: HashMap<String, network::Client>,
     reconnect: Sender<ReconnectRequest>,
-    return_sender: Sender<TcpStream>,
-    return_receiver: Receiver<TcpStream>,
+    return_sender: Sender<StreamKind>,
+    return_receiver: Receiver<StreamKind>,
 }
 
 impl Communicator for CommunicatorImpl {
@@ -112,7 +117,10 @@ impl Drop for CommunicatorImpl {
         for socket in self.sockets.values() {
             match socket {
                 network::Client::RemoteText(socket) | network::Client::RemoteJson(socket) => {
-                    _ = socket.shutdown(Shutdown::Both);
+                    match socket {
+                        StreamKind::Local(_) => (),
+                        StreamKind::Network(tcp_stream) => _ = tcp_stream.shutdown(Shutdown::Both),
+                    }
                 }
             };
         }
@@ -127,6 +135,13 @@ struct Args {
     port: u16,
     #[arg(long, default_value = "false")]
     ai: bool,
+    #[arg(long, default_value = "false")]
+    local_only: bool,
+}
+
+enum ConnectListener {
+    TcpListener(TcpListener),
+    LocalListener(interprocess::local_socket::Listener),
 }
 
 #[tokio::main]
@@ -143,24 +158,47 @@ async fn main() -> IoResult<()> {
     } else {
         52 / num_players
     };
-    let address =
-        SocketAddr::from_str(&format!("0.0.0.0:{}", args.port)).expect("Unknown socket address");
-    let listener = TcpListener::bind(address).expect("Failed to create listener socket");
+
+    let listener = if args.local_only {
+        let name = "plump.socket".to_ns_name::<GenericNamespaced>()?;
+        let opts = ListenerOptions::new().name(name);
+        ConnectListener::LocalListener(
+            opts.create_sync()
+                .expect("Failed to create listener socket"),
+        )
+    } else {
+        let address = SocketAddr::from_str(&format!("0.0.0.0:{}", args.port))
+            .expect("Unknown socket address");
+        ConnectListener::TcpListener(
+            TcpListener::bind(address).expect("Failed to create listener socket"),
+        )
+    };
     let mut player_names_and_types: Vec<(String, bool)> = vec![];
 
     let mut client_sockets = HashMap::<String, network::Client>::new();
 
     for _ in 0..(num_players) {
-        let mut remote_client = match listener.incoming().next().unwrap() {
-            Ok(stream) => {
-                stream.set_nodelay(true).expect("set_nodelay failed");
-                if args.ai {
-                    network::Client::RemoteJson(stream)
-                } else {
-                    network::Client::RemoteText(stream)
+        let stream = match listener {
+            ConnectListener::TcpListener(ref tcp_listener) => {
+                match tcp_listener.incoming().next().unwrap() {
+                    Ok(stream) => {
+                        stream.set_nodelay(true).expect("set_nodelay failed");
+                        StreamKind::Network(stream)
+                    }
+                    Err(_) => continue,
                 }
             }
-            Err(_) => continue,
+            ConnectListener::LocalListener(ref listener) => {
+                match listener.incoming().next().unwrap() {
+                    Ok(stream) => StreamKind::Local(stream),
+                    Err(_) => continue,
+                }
+            }
+        };
+        let mut remote_client = if args.ai {
+            network::Client::RemoteJson(stream)
+        } else {
+            network::Client::RemoteText(stream)
         };
 
         let name = remote_client.get_player_name()?;
@@ -170,7 +208,6 @@ async fn main() -> IoResult<()> {
         client_sockets.insert(name.clone(), remote_client);
         player_names_and_types.push((name, true));
     }
-
     let (reconnect_sender, reconnect_receiver) = channel();
     let (return_sender, return_receiver) = channel();
     let mut communicator = CommunicatorImpl {
@@ -186,9 +223,19 @@ async fn main() -> IoResult<()> {
     let reconnect_handler = tokio::spawn(async move {
         while let Ok(request) = reconnect_receiver.recv() {
             println!("Reconnecting player {}.", request.player);
-            let remote_client = match listener.incoming().next().unwrap() {
-                Ok(stream) => stream,
-                Err(_) => continue,
+            let remote_client = match listener {
+                ConnectListener::TcpListener(ref tcp_listener) => {
+                    match tcp_listener.incoming().next().unwrap() {
+                        Ok(stream) => StreamKind::Network(stream),
+                        Err(_) => continue,
+                    }
+                }
+                ConnectListener::LocalListener(ref listener) => {
+                    match listener.incoming().next().unwrap() {
+                        Ok(stream) => StreamKind::Local(stream),
+                        Err(_) => continue,
+                    }
+                }
             };
             request.return_channel.send(remote_client).unwrap();
         }

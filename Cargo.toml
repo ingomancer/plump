@@ -9,6 +9,9 @@ members = [
     "smart_client",
 ]
 
+[profile.release]
+debug = true
+
 [workspace.lints.rust]
 keyword_idents = "warn"
 missing_copy_implementations = "warn"
