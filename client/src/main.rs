@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
                             players: _,
                             winner_indices: _,
                         } => {
-                            println!("{}", message.to_string());
+                            println!("{}", message);
                         }
                         Message::GameOver => {
                             return Ok(());
@@ -177,6 +177,6 @@ async fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
             continue;
         }
 
-        return String::from_utf8(all).map_err(|_| IoError::new(ErrorKind::Other, "invalid UTF-8"));
+        return String::from_utf8(all).map_err(|_| IoError::other("invalid UTF-8"));
     }
 }

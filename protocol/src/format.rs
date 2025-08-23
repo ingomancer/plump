@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Display};
 
 use crate::{
     message::Message,
@@ -49,7 +49,7 @@ fn format_hand(hand: &[Card], valid_cards: &Option<HashSet<usize>>, with_indices
         .map(|(index, card)| {
             let darkened = valid_cards
                 .as_ref()
-                .map_or(false, |cards| !cards.contains(&index));
+                .is_some_and(|cards| !cards.contains(&index));
 
             let index = with_indices.then_some(index);
             format_card(*card, darkened, index)
@@ -172,41 +172,45 @@ fn format_game_over() -> String {
     "Game over!".to_owned()
 }
 
-impl ToString for Message {
-    fn to_string(&self) -> String {
-        match self {
-            Message::RequestGuessContext {
-                player,
-                hand,
-                guesses,
-                players,
-            } => format_request_guess_context(player, hand, guesses, *players),
+impl Display for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Message::RequestGuessContext {
+                    player,
+                    hand,
+                    guesses,
+                    players,
+                } => format_request_guess_context(player, hand, guesses, *players),
 
-            Message::Guesses { state } => format_guesses(state),
+                Message::Guesses { state } => format_guesses(state),
 
-            Message::Turn { whose: player } => format_turn(player),
+                Message::Turn { whose: player } => format_turn(player),
 
-            Message::PlayRequestContext {
-                player,
-                hand,
-                trick,
-                valid_cards,
-            } => format_play_request_context(player, hand, trick, valid_cards),
+                Message::PlayRequestContext {
+                    player,
+                    hand,
+                    trick,
+                    valid_cards,
+                } => format_play_request_context(player, hand, trick, valid_cards),
 
-            Message::Trick(trick) => format_trick(trick).unwrap_or_default(),
+                Message::Trick(trick) => format_trick(trick).unwrap_or_default(),
 
-            Message::Scoreboard { state } => format_scoreboard(state),
+                Message::Scoreboard { state } => format_scoreboard(state),
 
-            Message::Winner(player) => format_winner(player),
+                Message::Winner(player) => format_winner(player),
 
-            Message::Winners {
-                players,
-                winner_indices,
-            } => format_winners(players, winner_indices),
-            Message::RequestPlayerName => format_request_player_name(),
-            Message::PlayRequest(player) => format_play_request(player),
-            Message::RequestGuess => format_request_guess(),
-            Message::GameOver => format_game_over(),
-        }
+                Message::Winners {
+                    players,
+                    winner_indices,
+                } => format_winners(players, winner_indices),
+                Message::RequestPlayerName => format_request_player_name(),
+                Message::PlayRequest(player) => format_play_request(player),
+                Message::RequestGuess => format_request_guess(),
+                Message::GameOver => format_game_over(),
+            }
+        )
     }
 }

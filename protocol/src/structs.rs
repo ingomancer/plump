@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct PlayerName(pub String);
 
 impl PlayerName {
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         self.0.as_str()
     }
 }

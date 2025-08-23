@@ -128,7 +128,7 @@ where
         };
         communicator.write_to_all(winmsg.clone());
         if ai {
-            println!("{}", winmsg.to_string());
+            println!("{}", winmsg);
         }
         games += 1;
         if games == game_count {
@@ -138,7 +138,7 @@ where
     }
 }
 
-fn make_guess(hand: &Vec<Card>, guesses: &Vec<usize>, players: usize) -> usize {
+fn make_guess(hand: &[Card], guesses: &[usize], players: usize) -> usize {
     let mut guess = hand.iter().filter(|x| x.value >= 7).count();
     if !validate_guess(hand.len(), guesses, players, guess) {
         let new_guess = hand.iter().filter(|x| x.value >= 9).count();
@@ -151,7 +151,7 @@ fn make_guess(hand: &Vec<Card>, guesses: &Vec<usize>, players: usize) -> usize {
     guess
 }
 
-fn validate_guess(hand_size: usize, guesses: &Vec<usize>, players: usize, guess: usize) -> bool {
+fn validate_guess(hand_size: usize, guesses: &[usize], players: usize, guess: usize) -> bool {
     if guess > hand_size {
         return false;
     }
@@ -166,8 +166,8 @@ fn validate_guess(hand_size: usize, guesses: &Vec<usize>, players: usize, guess:
 fn request_guess<C>(
     communicator: &mut C,
     player: &Player,
-    hand: &Vec<Card>,
-    guesses: &Vec<usize>,
+    hand: &[Card],
+    guesses: &[usize],
     players: usize,
 ) -> usize
 where
@@ -177,8 +177,8 @@ where
         &player.name,
         Message::RequestGuessContext {
             player: player.clone(),
-            hand: hand.clone(),
-            guesses: guesses.clone(),
+            hand: hand.to_owned(),
+            guesses: guesses.to_vec(),
             players,
         },
     );
