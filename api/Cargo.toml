@@ -15,8 +15,8 @@ serde-generate = { version = "0.25.1", features = [
     "csharp",
 ], default-features = false }
 protocol = { path = "../protocol" }
-strum = "0.26.1"
-strum_macros = "0.26.1"
+strum = "0.26.3"
+strum_macros = "0.26.4"
 
 [lints]
 workspace = true

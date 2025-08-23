@@ -13,10 +13,10 @@ rand = { features = [
     "std_rng",
     "std",
 ], default-features = false, version = "0.8.5" }
-serde = { version = "1.0.160", features = [
+serde = { version = "1.0.219", features = [
     "serde_derive",
 ], default-features = false }
 
 [dev-dependencies]
-proptest = "1.1.0"
+proptest = "1.7.0"
 proptest-derive = "0.3.0"

@@ -9,6 +9,7 @@ pub enum StreamKind {
     Local(interprocess::local_socket::Stream),
     Network(TcpStream),
 }
+
 impl StreamKind {
     fn write(&mut self, data: &[u8]) -> Result<usize, IoError> {
         match self {

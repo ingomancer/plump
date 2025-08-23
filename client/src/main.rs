@@ -9,6 +9,9 @@ use std::{
 use std::os::unix::thread;
 
 use clap::Parser;
+use interprocess::local_socket::{
+    prelude::*, tokio::Stream, traits::tokio::Stream as StreamTrait, GenericNamespaced,
+};
 use playing_cards::structs::Card;
 use protocol::message::Message;
 use rand::{distributions::Alphanumeric, seq::IteratorRandom, thread_rng, Rng};
@@ -36,17 +39,47 @@ struct Args {
     port: u16,
     #[arg(long, default_value = "false")]
     ai: bool,
+    #[arg(long, default_value = "false")]
+    local_only: bool,
+}
+
+enum SocketKind {
+    Local(Stream),
+    Remote(TcpStream),
+}
+
+impl SocketKind {
+    async fn read(&mut self, buffer: &mut [u8; 1024]) -> StdResult<usize, IoError> {
+        match self {
+            SocketKind::Local(stream) => stream.read(buffer).await,
+            SocketKind::Remote(tcp_stream) => tcp_stream.read(buffer).await,
+        }
+    }
+
+    async fn write(&mut self, data: &[u8]) -> StdResult<usize, IoError> {
+        match self {
+            SocketKind::Local(ref mut stream) => stream.write(data).await,
+            SocketKind::Remote(ref mut tcp_stream) => tcp_stream.write(data).await,
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let mut socket = TcpStream::connect((args.address, args.port))
-        .await
-        .map_err(Error::Connect)?;
-    socket.set_nodelay(true).expect("set_nodelay failed");
-
+    let mut socket = if args.local_only {
+        let name = "plump.socket"
+            .to_ns_name::<GenericNamespaced>()
+            .expect("Could not find socket. Is the server running?");
+        SocketKind::Local(Stream::connect(name).await.expect("I am error"))
+    } else {
+        let socket = TcpStream::connect((args.address, args.port))
+            .await
+            .map_err(Error::Connect)?;
+        socket.set_nodelay(true).expect("set_nodelay failed");
+        SocketKind::Remote(socket)
+    };
     if args.ai {
         let name: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
@@ -108,20 +141,40 @@ async fn main() -> Result<()> {
             }
         }
     } else {
-        let (mut reader, mut writer) = socket.into_split();
+        match socket {
+            SocketKind::Local(stream) => {
+                let (mut reader, mut writer) = stream.split();
 
-        let read_handle = tokio::spawn(async move {
-            let mut stdout = stdout();
-            copy(&mut reader, &mut stdout).await.map_err(Error::Copy)
-        });
+                let read_handle = tokio::spawn(async move {
+                    let mut stdout = stdout();
+                    copy(&mut reader, &mut stdout).await.map_err(Error::Copy)
+                });
 
-        let write_handle = tokio::spawn(async move {
-            let mut stdin = stdin();
-            copy(&mut stdin, &mut writer).await.map_err(Error::Copy)
-        });
+                let write_handle = tokio::spawn(async move {
+                    let mut stdin = stdin();
+                    copy(&mut stdin, &mut writer).await.map_err(Error::Copy)
+                });
 
-        read_handle.await.map_err(Error::Join)??;
-        write_handle.await.map_err(Error::Join)??;
+                read_handle.await.map_err(Error::Join)??;
+                write_handle.await.map_err(Error::Join)??;
+            }
+            SocketKind::Remote(tcp_stream) => {
+                let (mut reader, mut writer) = tcp_stream.into_split();
+
+                let read_handle = tokio::spawn(async move {
+                    let mut stdout = stdout();
+                    copy(&mut reader, &mut stdout).await.map_err(Error::Copy)
+                });
+
+                let write_handle = tokio::spawn(async move {
+                    let mut stdin = stdin();
+                    copy(&mut stdin, &mut writer).await.map_err(Error::Copy)
+                });
+
+                read_handle.await.map_err(Error::Join)??;
+                write_handle.await.map_err(Error::Join)??;
+            }
+        }
     }
 
     Ok(())
@@ -143,7 +196,7 @@ fn make_guess(players: usize, hand: Vec<Card>, guesses: Vec<usize>) -> usize {
     guess
 }
 
-async fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
+async fn send_to_remote(socket: &mut SocketKind, text: String) -> IoResult<()> {
     let mut data = text.into_bytes();
     while !data.is_empty() {
         let sent = socket.write(&data).await?;
@@ -159,7 +212,7 @@ async fn send_to_remote(socket: &mut TcpStream, text: String) -> IoResult<()> {
     Ok(())
 }
 
-async fn readline_from_remote(socket: &mut TcpStream) -> IoResult<String> {
+async fn readline_from_remote(socket: &mut SocketKind) -> IoResult<String> {
     const NEWLINE: u8 = 0xA;
     let mut all = Vec::<u8>::new();
     loop {
